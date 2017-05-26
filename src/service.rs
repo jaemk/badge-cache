@@ -11,9 +11,12 @@ use iron::prelude::*;
 use iron::typemap::Key;
 use iron::middleware::{BeforeMiddleware};
 use router::Router;
-use persistent::{Write, Read};
+use persistent::Write;
 use mount::Mount;
 use staticfile::Static;
+use logger;
+use env_logger;
+
 use routes;
 
 
@@ -40,7 +43,7 @@ impl BeforeMiddleware for InfoLog {
 }
 
 
-pub fn start(host: &str, db: Option<&str>, log: bool) {
+pub fn start(host: &str, log: bool) {
     // get default host
     let host = if host.is_empty() { "localhost:3000" } else { host };
 
@@ -56,12 +59,14 @@ pub fn start(host: &str, db: Option<&str>, log: bool) {
     // initialize and link our loggers if we're logging
     let mut chain = Chain::new(router);
     chain.link(Write::<Cache>::both(cache));
+
+    env_logger::init().unwrap();
+    let (log_before, log_after) = logger::Logger::new(None);
+    chain.link_before(log_before);
+    chain.link_after(log_after);
+
     if log {
-        //env_logger::init().unwrap();
-        //let (log_before, log_after) = Logger::new(None);
-        //chain.link_before(log_before);
         chain.link_before(InfoLog);
-        //chain.link_after(log_after);
     }
 
     // mount our chain of services and a static file handler

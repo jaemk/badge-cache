@@ -21,7 +21,7 @@ pub fn main() {
                          .long("public")
                          .help("Serve on '0.0.0.0' instead of 'localhost'"))
                     .arg(Arg::with_name("silent")
-                         .long("silent")
+                         .long("errors-only")
                          .help("Don't output any logging info")))
         .subcommand(SubCommand::with_name("admin")
                     .about("admin functions")
@@ -48,8 +48,7 @@ fn run(matches: ArgMatches) -> Result<()> {
         let host_base = if serve_matches.is_present("public") { "0.0.0.0" } else { "localhost" };
         let host = format!("{}:{}", host_base, port);
         let do_log = !serve_matches.is_present("silent");
-        let db_url = serve_matches.value_of("database");
-        service::start(&host, db_url, do_log);
+        service::start(&host, do_log);
         return Ok(());
     }
 
