@@ -14,7 +14,6 @@ Note, if you build an artifact, it needs to be run from the project root
 
 ### TODO:
 
-* fix content encoding issues when directly returning an svg
 * add admin commands for clearing cached items
 * setup sample nginx config sample
 * setup service scripts
