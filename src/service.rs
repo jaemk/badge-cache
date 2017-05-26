@@ -72,6 +72,7 @@ pub fn start(host: &str, log: bool) {
     // mount our chain of services and a static file handler
     let mut mount = Mount::new();
     mount.mount("/", chain)
+         .mount("/favicon.ico", Static::new(Path::new("static/favicon.ico")))
          .mount("/static/", Static::new(Path::new("static")));
 
     println!(" ** Serving at {}", host);
