@@ -15,7 +15,3 @@ Note, if you build an artifact, it needs to be run from the project root
 ### TODO:
 
 * add admin commands for clearing cached items
-* setup sample nginx config sample
-* setup service scripts
-* setup cert config sample
-
