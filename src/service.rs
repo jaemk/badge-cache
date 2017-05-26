@@ -7,6 +7,7 @@
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 
+use chrono::UTC;
 use iron::prelude::*;
 use iron::typemap::Key;
 use iron::middleware::{BeforeMiddleware};
@@ -18,6 +19,9 @@ use logger;
 use env_logger;
 
 use routes;
+
+
+static DT_FORMAT: &'static str = "%Y-%m-%d_%H:%M:%S";
 
 
 type CacheStore = HashMap<String, PathBuf>;
@@ -33,17 +37,19 @@ impl Key for Cache { type Value = CacheStore; }
 pub struct InfoLog;
 impl BeforeMiddleware for InfoLog {
     fn before(&self, req: &mut Request) -> IronResult<()> {
-        println!("[{:?}]: {}", req.method, req.url);
+        let now = UTC::now().format(DT_FORMAT).to_string();
+        println!("[{:?}][{}]: {}", req.method, now, req.url);
         Ok(())
     }
     fn catch(&self, req: &mut Request, err: IronError) -> IronResult<()> {
-        println!("[{:?}]: {} -> {}", req.method, req.url, err);
+        let now = UTC::now().format(DT_FORMAT).to_string();
+        println!("[{:?}][{}]: {} -> {}", req.method, now, req.url, err);
         Err(err)
     }
 }
 
 
-pub fn start(host: &str, log: bool) {
+pub fn start(host: &str, log_access: bool) {
     // get default host
     let host = if host.is_empty() { "localhost:3000" } else { host };
 
@@ -65,7 +71,7 @@ pub fn start(host: &str, log: bool) {
     chain.link_before(log_before);
     chain.link_after(log_after);
 
-    if log {
+    if log_access {
         chain.link_before(InfoLog);
     }
 
