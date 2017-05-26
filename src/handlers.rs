@@ -165,33 +165,6 @@ pub fn badge(req: &mut Request) -> IronResult<Response> {
 
 
 pub fn home(_req: &mut Request) -> IronResult<Response> {
-    Ok(Response::with((mime!(Text/Html), status::Ok,
-r##"
-<html>
-<head>
-<title> Badge.rs </title>
-<link rel="shortcut icon" href="/favicon.ico?v=1" type="image/x-icon">
-<link rel="icon" href="/favicon.ico?v=1" type="image/x-icon">
-</head>
-
-<body>
-<pre>
-Welcome to badge-cache!
-
-Usage:
-    - Get a crate's badge:
-        <code> /crate/&ltcrate-name&gt?&ltshields-io-params&gt </code>
-
-        ex. /crate/iron?label=iron <img src="/static/examples/crate__iron_label_iron.svg" />
-
-    - Get a generic badge:
-        /badge/&ltbadge-info-triple&gt?&ltshields-io-params&gt
-
-        ex. /badge/custom-status-x?style=social <img src="/static/examples/label__custom-status-x_style_social.svg" />
-
-</pre>
-</body>
-</html>
-"##)))
+    panic!("served by `staticfiles::Static`")
 }
 

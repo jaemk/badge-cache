@@ -4,7 +4,7 @@ extern crate reqwest;
 extern crate url;
 #[macro_use] extern crate lazy_static;
 
-#[macro_use] extern crate mime;
+extern crate mime;
 extern crate params;
 
 extern crate iron;
