@@ -6,7 +6,6 @@
 
 > Cache is only valid for the lifetime of the program. Restarting will invalidate any cached badges
 
-* install [rust](https://rustup.rs/)
 * `cargo run --release` -> localhost:3000
 
 
