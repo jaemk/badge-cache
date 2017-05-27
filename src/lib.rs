@@ -36,11 +36,11 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Error::*;
         match *self {
-            Msg(ref s)               => write!(f, "Error: {}", s),
-            IoError(ref e)           => write!(f, "Error: {}", e),
-            IoErrorMsg(ref e, ref s) => write!(f, "Msg: {}, Error: {}", s, e),
-            UrlParseError(ref e)     => write!(f, "Error: {}", e),
-            Reqwest(ref e)           => write!(f, "Error: {}", e),
+            Msg(ref s)               => write!(f, "Msg: {}", s),
+            IoError(ref e)           => write!(f, "Io: {}", e),
+            IoErrorMsg(ref e, ref s) => write!(f, "Io: {}, Error: {}", s, e),
+            UrlParseError(ref e)     => write!(f, "UrlParse: {}", e),
+            Reqwest(ref e)           => write!(f, "Reqwest: {}", e),
         }
     }
 }
