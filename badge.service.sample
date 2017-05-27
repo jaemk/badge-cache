@@ -1,0 +1,18 @@
+# systemd config
+# copy to /etc/systemd/system/badge.service
+#
+# systemctl enable badge.service
+# systemctl start badge
+# systemctl status badge.service
+# systemctl daemon-reload
+# # tail the log
+# journalctl -f -u badge
+[Unit]
+Description=Badge-cache App Server
+
+[Service]
+WorkingDirectory=/<PATH_TO_PROJ_DIR>/badge-cache
+ExecStart=/<PATH_TO_EXEC>/badge-cache serve --port <PORT>
+
+[Install]
+WantedBy=multi-user.target
