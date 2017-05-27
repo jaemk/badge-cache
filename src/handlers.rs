@@ -87,7 +87,7 @@ fn get_badge(req: &mut Request, badge_type: &Badge, name: &str, params: &UrlPara
             should_save = true;
             fetch_badge(badge_type, &badge_key, name, params, &*STATIC_ROOT)?
         }
-        Some(ref cached) => {
+        Some(cached) => {
             match fs::File::open(cached) {
                 Ok(_) => {
                     should_save = false;
@@ -109,11 +109,11 @@ fn get_badge(req: &mut Request, badge_type: &Badge, name: &str, params: &UrlPara
 }
 
 
-fn badge_or_redirect(req: &mut Request, badge_type: Badge, name: &str, params: &UrlParams) -> IronResult<Response> {
-    match get_badge(req, &badge_type, name, params) {
+fn badge_or_redirect(req: &mut Request, badge_type: &Badge, name: &str, params: &UrlParams) -> IronResult<Response> {
+    match get_badge(req, badge_type, name, params) {
         Err(_) => {
             // Failed to fetch a cached or fresh version, redirect to shields.io
-            let url = match badge_type {
+            let url = match *badge_type {
                 Badge::Crate => format!("https://img.shields.io/crates/v/{krate}.svg?label={krate}", krate=name),
                 Badge::Label => format!("https://img.shields.io/badge/{info}.svg?style=social", info=name),
             };
@@ -144,7 +144,7 @@ pub fn krate(req: &mut Request) -> IronResult<Response> {
             None => unreachable!(),
         }
     };
-    badge_or_redirect(req, Badge::Crate, &crate_name, &params)
+    badge_or_redirect(req, &Badge::Crate, &crate_name, &params)
 }
 
 
@@ -160,7 +160,7 @@ pub fn badge(req: &mut Request) -> IronResult<Response> {
             None => unreachable!(),
         }
     };
-    badge_or_redirect(req, Badge::Label, &badge_info, &params)
+    badge_or_redirect(req, &Badge::Label, &badge_info, &params)
 }
 
 

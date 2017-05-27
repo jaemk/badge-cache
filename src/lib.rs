@@ -18,14 +18,16 @@ extern crate env_logger;
 pub mod service;
 pub mod handlers;
 pub mod routes;
+pub mod admin;
 
 use std::fmt;
 
 
 #[derive(Debug)]
 pub enum Error {
-    Any(String),
+    Msg(String),
     IoError(std::io::Error),
+    IoErrorMsg(std::io::Error, String),
     UrlParseError(url::ParseError),
     Reqwest(reqwest::Error),
 }
@@ -34,10 +36,11 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Error::*;
         match *self {
-            Any(ref s)           => write!(f, "Error: {}", s),
-            IoError(ref e)       => write!(f, "Error: {}", e),
-            UrlParseError(ref e) => write!(f, "Error: {}", e),
-            Reqwest(ref e)       => write!(f, "Error: {}", e),
+            Msg(ref s)               => write!(f, "Error: {}", s),
+            IoError(ref e)           => write!(f, "Error: {}", e),
+            IoErrorMsg(ref e, ref s) => write!(f, "Msg: {}, Error: {}", s, e),
+            UrlParseError(ref e)     => write!(f, "Error: {}", e),
+            Reqwest(ref e)           => write!(f, "Error: {}", e),
         }
     }
 }

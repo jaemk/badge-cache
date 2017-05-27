@@ -3,6 +3,7 @@ extern crate badge_cache;
 
 use badge_cache::service;
 use badge_cache::errors::*;
+use badge_cache::admin;
 
 use clap::{Arg, App, SubCommand, ArgMatches};
 
@@ -25,24 +26,24 @@ pub fn main() {
                          .help("Don't output any logging info")))
         .subcommand(SubCommand::with_name("admin")
                     .about("admin functions")
-                    .arg(Arg::with_name("refresh")
-                         .long("refresh")
+                    .arg(Arg::with_name("clear")
+                         .long("clear-cached-files")
                          .takes_value(false)
-                         .help("Refresh cached badges"))
+                         .help("Clear out any cached badges"))
                     .arg(Arg::with_name("no-confirm")
                          .long("no-confirm")
                          .takes_value(false)
                          .help("Auto-confirm/skip any confirmation checks")))
         .get_matches();
 
-    if let Err(error) = run(matches) {
+    if let Err(error) = run(&matches) {
         println!("Error: {}", error);
         ::std::process::exit(1);
     }
 }
 
 
-fn run(matches: ArgMatches) -> Result<()> {
+fn run(matches: &ArgMatches) -> Result<()> {
     if let Some(serve_matches) = matches.subcommand_matches("serve") {
         let port = serve_matches.value_of("port").unwrap_or("3000");
         let host_base = if serve_matches.is_present("public") { "0.0.0.0" } else { "localhost" };
@@ -52,9 +53,8 @@ fn run(matches: ArgMatches) -> Result<()> {
         return Ok(());
     }
 
-    if let Some(_admin_matches) = matches.subcommand_matches("admin") {
-        //return admin::handle(admin_matches)
-        return Ok(());
+    if let Some(admin_matches) = matches.subcommand_matches("admin") {
+        return admin::handle(admin_matches)
     }
 
     println!("badge-cache: see `--help`");
