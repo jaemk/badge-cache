@@ -20,6 +20,11 @@
         * `sudo systemctl enable badge`
         * `sudo systemctl start badge`
         * check the logs `sudo journalctl -f -u badge`
+* Clearing the cache:
+    * Restarting the server will invalidate any cached items (but doesn't delete them)
+    * Use the `admin` helper to delete cached files
+        * `target/release/badge-cache admin --clear-cached-badges <path-to-proj-root>/static/badges`
+            * live dangerously: `--no-confirm`
 * `cargo run -- --help`
 
 Note, if you build an artifact, it needs to be run from the project root
