@@ -48,7 +48,7 @@ impl fmt::Display for Badge {
 type UrlParams = Vec<(String, String)>;
 
 
-/// Downloads a fresh badge from shields.io and save it to `badge_path`
+/// Downloads a fresh badge from shields.io and saves it to `badge_path`
 /// Returns the contents of the downloaded file.
 ///
 /// Errors:
@@ -112,8 +112,12 @@ fn get_badge(badge_type: &Badge, name: &str, params: &UrlParams) -> Result<Vec<u
 /// Returns the contents of a request badge defined by its `badge_type`, `name`,
 /// and modifying `params`
 /// If something goes wrong when loading/fetching bytes, redirect to shields.io
-fn badge_or_redirect(badge_type: &Badge, name: &str, params: &UrlParams) -> IronResult<Response> {
-    match get_badge(badge_type, name, params) {
+fn badge_or_redirect(badge_type: &Badge, name: &str, req: &mut Request) -> IronResult<Response> {
+    let params = req.get_ref::<Params>().unwrap()
+        .to_strict_map::<String>().unwrap();
+    let params: UrlParams = params.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+
+    match get_badge(badge_type, name, &params) {
         Err(_) => {
             // Failed to fetch a cached or fresh version, redirect to shields.io
             let url = match *badge_type {
@@ -134,9 +138,6 @@ fn badge_or_redirect(badge_type: &Badge, name: &str, params: &UrlParams) -> Iron
 
 /// handle `/crate/:cratename` requests
 pub fn krate(req: &mut Request) -> IronResult<Response> {
-    let params = req.get_ref::<Params>().unwrap()
-        .to_strict_map::<String>().unwrap();
-    let params: UrlParams = params.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
     // the `:cratename` token should exist or the router messed up
     let crate_name = {
         let crate_name = req.extensions.get::<Router>().unwrap().find("cratename");
@@ -145,15 +146,12 @@ pub fn krate(req: &mut Request) -> IronResult<Response> {
             None => unreachable!(),
         }
     };
-    badge_or_redirect(&Badge::Crate, &crate_name, &params)
+    badge_or_redirect(&Badge::Crate, &crate_name, req)
 }
 
 
 /// handle `/badge/:badgeinfo` requests
 pub fn badge(req: &mut Request) -> IronResult<Response> {
-    let params = req.get_ref::<Params>().unwrap()
-        .to_strict_map::<String>().unwrap();
-    let params: UrlParams = params.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
     // the `:badgeinfo` token should exist or the router messed up
     let badge_info = {
         let badge_info = req.extensions.get::<Router>().unwrap().find("badgeinfo");
@@ -162,11 +160,6 @@ pub fn badge(req: &mut Request) -> IronResult<Response> {
             None => unreachable!(),
         }
     };
-    badge_or_redirect(&Badge::Label, &badge_info, &params)
-}
-
-
-pub fn home(_req: &mut Request) -> IronResult<Response> {
-    panic!("served by `staticfiles::Static`")
+    badge_or_redirect(&Badge::Label, &badge_info, req)
 }
 
