@@ -4,9 +4,7 @@
 
 ## Setup / Usage
 
-> Cache is only valid for the lifetime of the program. Restarting will invalidate any cached badges
-
-> `libssl-dev` is required for fetching from shields.io
+> `libssl-dev` is required for `reqwest` for fetching from shields.io
 
 * Run a dev instance `cargo run -- serve` -> `localhost:3000`
 * Expose a direct instance to the world `cargo build --release`, `sudo target/release/badge-cache serve --port 80`
@@ -21,7 +19,6 @@
         * `sudo systemctl start badge`
         * check the logs `sudo journalctl -f -u badge`
 * Clearing the cache:
-    * Restarting the server will invalidate any cached items (but doesn't delete them)
     * Use the `admin` helper to delete cached files
         * `target/release/badge-cache admin --clear-cached-badges <path-to-proj-root>/static/badges`
             * live dangerously: `--no-confirm`
