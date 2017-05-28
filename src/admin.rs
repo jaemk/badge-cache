@@ -47,7 +47,7 @@ fn clear_cached_files(no_confirm: bool, dir: &str) -> Result<()> {
             let path = entry.path();
 
             if path.is_dir() {
-                fs::remove_dir_all(path)?;
+                // ignore nested directories
                 continue;
             }
 
