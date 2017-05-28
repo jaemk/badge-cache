@@ -7,7 +7,7 @@
 > `libssl-dev` is required for `reqwest` for fetching from shields.io
 
 * Run a dev instance `cargo run -- serve` -> `localhost:3000`
-* Expose a direct instance to the world `cargo build --release`, `sudo target/release/badge-cache serve --port 80`
+* Expose a direct instance to the world `cargo build --release`, `sudo target/release/badge-cache serve --public --port 80`
 * Setup behind a proxy
     * setup ssl certs (if you want), see `letsencrypt.info`
     * copy `nginx.conf.sample` to `/etc/nginx/sites-available/badge` and update with your project/site info
