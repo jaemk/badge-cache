@@ -6,6 +6,7 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 use std::io::Write;
+use std::ffi::OsStr;
 use clap::ArgMatches;
 
 use errors::*;
@@ -30,6 +31,8 @@ fn confirm(msg: &str) -> Result<()> {
 }
 
 
+const CACHE_KEEP: [&'static str; 1] = [".gitkeep"];
+
 fn clear_cached_files(no_confirm: bool, dir: &str) -> Result<()> {
     let static_root = if dir.is_empty() { default_static_root() } else { PathBuf::from(dir) };
     if !no_confirm {
@@ -37,18 +40,27 @@ fn clear_cached_files(no_confirm: bool, dir: &str) -> Result<()> {
     }
     let read_dir = fs::read_dir(&static_root)
         .map_err(|e| Error::IoErrorMsg(e, format!("Unable to read `STATIC_ROOT` dir: {:?} - make sure you run this from the project root", &static_root)))?;
+
+    let mut count = 0;
     for entry in read_dir {
         if let Ok(entry) = entry {
             let path = entry.path();
 
             if path.is_dir() {
                 fs::remove_dir_all(path)?;
-            } else {
-                fs::remove_file(path)?;
+                continue;
             }
+
+            if let Some(fname) = path.file_name().and_then(OsStr::to_str) {
+                if CACHE_KEEP.contains(&fname) { continue; }
+            }
+
+            fs::remove_file(path)?;
+            count += 1;
         };
     }
-    println!("[badge-cache] [admin] - cleaned out cached badges in {:?}", &static_root);
+
+    println!("[badge-cache] [admin] - cleaned out {} cached badges in {:?}", count, &static_root);
     Ok(())
 }
 
