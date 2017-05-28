@@ -20,7 +20,7 @@
         * check the logs `sudo journalctl -f -u badge`
 * Clearing the cache:
     * Use the `admin` helper to delete cached files
-        * `target/release/badge-cache admin --clear-cached-badges <path-to-proj-root>/static/badges`
+        * `target/release/badge-cache admin --clear-cached-badges /<PATH_TO_PROJ>/static/badges`
             * live dangerously: `--no-confirm`
         * setup in a cron job, 11am & 11pm
             * `0 11,23 * * * /<PATH_TO_PROJ>/target/release/badge-cache admin --clear-cached-badges /<PATH_TO_PROJ>/static/badges --no-confirm >> /var/log/badge.log 2>&1`
