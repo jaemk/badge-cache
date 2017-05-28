@@ -1,5 +1,5 @@
-# copy to /etc/nginx/sites-available/badge-cache
-# create symlink to /etc/nginx/sites-enabled/
+# copy to /etc/nginx/sites-available/badge
+# create symlink in /etc/nginx/sites-enabled/ to sites-available/badge
 # sudo nginx -t
 
 
