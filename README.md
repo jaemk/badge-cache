@@ -22,7 +22,9 @@
     * Use the `admin` helper to delete cached files
         * `target/release/badge-cache admin --clear-cached-badges <path-to-proj-root>/static/badges`
             * live dangerously: `--no-confirm`
+        * setup in a cron job, 11am & 11pm
+            * `0 11,23 * * * /<PATH_TO_PROJ>/target/release/badge-cache admin --clear-cached-badges /<PATH_TO_PROJ>/static/badges --no-confirm >> /var/log/badge.log 2>&1`
 * `cargo run -- --help`
 
-Note, if you build an artifact, it needs to be run from the project root
+Note, if you build an artifact, it needs to be run from the project root so it can find its `static/badges` directory
 
