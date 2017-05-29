@@ -8,7 +8,8 @@ use std::path::Path;
 
 use chrono::UTC;
 use iron::prelude::*;
-use iron::middleware::{BeforeMiddleware};
+use iron::middleware::{BeforeMiddleware, AfterMiddleware};
+use iron::headers::{CacheControl, CacheDirective};
 use router::Router;
 use mount::Mount;
 use staticfile::Static;
@@ -37,6 +38,23 @@ impl BeforeMiddleware for InfoLog {
 }
 
 
+/// Custom `CacheControl` header settings
+/// Applies a `Cache-Control: max-age=3600` if no `CacheControl` header is already set.
+pub struct DefaultCacheSettings;
+impl AfterMiddleware for DefaultCacheSettings {
+    fn after(&self, _req: &mut Request, mut resp: Response) -> IronResult<Response> {
+        if resp.headers.get::<CacheControl>().is_none() {
+            resp.headers.set(
+                CacheControl(vec![
+                    CacheDirective::MaxAge(3600u32),
+                    CacheDirective::Public,
+                ]));
+        }
+        Ok(resp)
+    }
+}
+
+
 /// Initialize server
 pub fn start(host: &str, log_access: bool) {
     // get default host
@@ -53,6 +71,7 @@ pub fn start(host: &str, log_access: bool) {
     env_logger::init().unwrap();
     let (log_before, log_after) = logger::Logger::new(None);
     chain.link_before(log_before);
+    chain.link_after(DefaultCacheSettings);
     chain.link_after(log_after);
 
     if log_access {
