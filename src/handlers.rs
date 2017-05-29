@@ -117,7 +117,7 @@ fn badge_or_redirect(badge_type: &Badge, name: &str, req: &mut Request) -> IronR
         .to_strict_map::<String>().unwrap();
     let params: UrlParams = params.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
 
-    let name = match name.find(".") {
+    let name = match name.find(".svg") {
         Some(n) => &name[..n],
         None => name,
     };
