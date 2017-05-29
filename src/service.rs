@@ -19,7 +19,7 @@ use env_logger;
 use routes;
 
 
-static DT_FORMAT: &'static str = "%Y-%m-%d_%H:%M:%S";
+pub static DT_FORMAT: &'static str = "%Y-%m-%d_%H:%M:%S";
 
 
 /// Custom logger to print out access info
