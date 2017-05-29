@@ -14,18 +14,23 @@ Welcome to badge-cache!
 Usage:
     - Get a crate's badge:
         /crate/&ltcrate-name&gt?&ltshields-io-params&gt
+        ex. /crate/iron?label=iron&style=flat-square <img src="/crate/iron?label=iron&style=flat-square" />
 
-        ex. /crate/iron?label=iron <img src="/static/examples/crate__iron_label_iron.svg" />
 
-    - Get a crate's badge (shields.io compatible URL):
-        /crates/v/&ltcrate-name&gt?&ltshields-io-params&gt
+        (shields.io compatible url)
+        /crates/v/&ltcrate-name&gt.svg?&ltshields-io-params&gt
+        ex. /crates/v/iron.svg?label=iron <img src="/crates/v/mime.svg?label=mime" />
 
-        ex. /crates/v/iron?label=iron <img src="/static/examples/crate__iron_label_iron.svg" />
 
     - Get a generic badge:
         /badge/&ltbadge-info-triple&gt?&ltshields-io-params&gt
+        ex. /badge/custom-long--status--note-blue?style=flat-square <img src="/badge/custom-long--status--note-blue?style=flat-square" />
 
-        ex. /badge/custom-status-x?style=social <img src="/static/examples/label__custom-status-x_style_social.svg" />
+
+        (shields.io compatible url)
+        /badge/&ltbadge-info-triple&gt.svg?&ltshields-io-params&gt
+        ex. /badge/custom-status-x.svg?style=social <img src="/badge/custom-status-x.svg?style=social" />
+
         </pre>
     </body>
 </html>
