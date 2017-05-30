@@ -20,6 +20,11 @@ Usage:
         (shields.io compatible url)
         /crates/v/&ltcrate-name&gt.svg?&ltshields-io-params&gt
         ex. /crates/v/mime.svg?label=mime <img src="/crates/v/mime.svg?label=mime" />
+        ex. /crates/v/mime.png?label=mime <img src="/crates/v/mime.png?label=mime" />
+        ex. /crates/v/mime.jpg?label=mime <img src="/crates/v/mime.jpg?label=mime" />
+
+        ex. /crates/v/mime.json?label=mime
+<span id="json-info"><noscript> I can't load without javascript -_- </noscript></span>
 
 
     - Get a generic badge:
@@ -34,5 +39,19 @@ Usage:
         </pre>
     </body>
 
-    <a href="https://github.com/jaemk/badge-cache"><img src="static/github.png" /></a>
+    <a href="https://github.com/jaemk/badge-cache"><img style="width: 32px;" src="static/github.png" /></a>
+    <script>
+document.addEventListener("DOMContentLoaded", function() {
+    console.log("hey");
+    var jsonInfo = document.getElementById('json-info');
+    http = new XMLHttpRequest();
+    var url = '/crate/mime.json?label=mime';
+    http.open("GET", url, true);
+    http.onreadystatechange = function() {
+        if (http.readyState !== XMLHttpRequest.DONE || http.status !== 200) { return; }
+        jsonInfo.textContent = http.responseText;
+    }
+    http.send();
+});
+    </script>
 </html>

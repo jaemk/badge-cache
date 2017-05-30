@@ -25,6 +25,7 @@ use std::fmt;
 
 #[derive(Debug)]
 pub enum Error {
+    Nil,
     Msg(String),
     IoError(std::io::Error),
     IoErrorMsg(std::io::Error, String),
@@ -36,6 +37,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Error::*;
         match *self {
+            Nil                      => write!(f, "nothing to see here"),
             Msg(ref s)               => write!(f, "Msg: {}", s),
             IoError(ref e)           => write!(f, "Io: {}", e),
             IoErrorMsg(ref e, ref s) => write!(f, "Io: {}, Error: {}", s, e),

@@ -3,6 +3,7 @@
 //!
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
+use std::ffi::OsStr;
 use std::fs;
 use std::env;
 use std::time;
@@ -12,10 +13,13 @@ use reqwest;
 use url::Url;
 use iron::prelude::*;
 use iron::{self, status, modifiers};
+use persistent;
 use router::Router;
 use params::Params;
 use mime;
+use chrono::{Duration, UTC};
 
+use service::{Cache, Record};
 use errors::*;
 
 
@@ -25,7 +29,11 @@ lazy_static! {
         root.push("static/badges");
         root
     };
-    static ref SVG: mime::Mime = "image/svg+xml".parse().unwrap();
+    static ref LIFESPAN: time::Duration = time::Duration::new(43200, 0);  // 43200s == 12hrs
+    static ref SVG: mime::Mime = "image/svg+xml".parse().expect("failed parsing svg mimetype");
+    static ref PNG: mime::Mime = "image/png".parse().expect("failed parsing png mimetype");
+    static ref JPG: mime::Mime = "image/jpg".parse().expect("failed parsing jpg mimetype");
+    static ref JSON: mime::Mime = "application/json".parse().expect("failed parsing json mimetype");
 }
 
 
@@ -48,6 +56,17 @@ impl fmt::Display for Badge {
 type UrlParams = Vec<(String, String)>;
 
 
+fn mime_from_filetype(filetype: &str) -> Result<mime::Mime> {
+    Ok(match filetype {
+        "svg" => SVG.clone(),
+        "png" => PNG.clone(),
+        "jpg" => JPG.clone(),
+        "json" => JSON.clone(),
+        _ => return Err(Error::Nil),
+    })
+}
+
+
 /// Downloads a fresh badge from shields.io and saves it to `badge_path`
 /// Returns the contents of the downloaded file.
 ///
@@ -55,11 +74,11 @@ type UrlParams = Vec<(String, String)>;
 ///     * Url parse errors from generating a new shields.io url with querystring
 ///     * Network errors from reqwest
 ///     * Io errors from copying badge content or writing it to file
-fn fetch_badge(badge_type: &Badge, badge_path: PathBuf, name: &str, params: &UrlParams) -> Result<Vec<u8>> {
+fn fetch_badge(badge_type: &Badge, badge_path: PathBuf, name: &str, filetype: &str, params: &UrlParams) -> Result<Vec<u8>> {
     println!("[LOG]: fetching fresh badge ({}) -> {:?}", badge_type, badge_path);
     let url = match *badge_type {
-        Badge::Crate => format!("https://img.shields.io/crates/v/{krate}.svg", krate=name),
-        Badge::Label => format!("https://img.shields.io/badge/{info}.svg", info=name),
+        Badge::Crate => format!("https://img.shields.io/crates/v/{}.{}", name, filetype),
+        Badge::Label => format!("https://img.shields.io/badge/{}.{}", name, filetype),
     };
     let url = Url::parse_with_params(&url, params)?;
 
@@ -84,9 +103,11 @@ fn fetch_badge(badge_type: &Badge, badge_path: PathBuf, name: &str, params: &Url
 ///
 /// Errors:
 ///     * Io/Url/Reqwest errors from `fetch_badge`
-fn get_badge(badge_type: &Badge, name: &str, params: &UrlParams) -> Result<Vec<u8>> {
+fn get_badge(req: &mut Request, badge_type: &Badge, name: &str, filetype: &str, params: &UrlParams) -> Result<Vec<u8>> {
     // key for the cache
-    let badge_key = params.iter().fold(String::from(name), |mut s, &(ref k, ref v)| {
+    let mut s = String::from(name);
+    s.push_str(filetype);
+    let badge_key = params.iter().fold(s, |mut s, &(ref k, ref v)| {
         s.push('_');
         s.push_str(k);
         s.push('_');
@@ -94,18 +115,41 @@ fn get_badge(badge_type: &Badge, name: &str, params: &UrlParams) -> Result<Vec<u
         s
     });
 
-    let filename = format!("{}__{}.svg", badge_type, badge_key);
+    let cache_mutex = req.get::<persistent::Write<Cache>>().unwrap();
+
+    let filename = format!("{}__{}.{}", badge_type, badge_key, filetype);
+
     let mut badge_path = PathBuf::from(&*STATIC_ROOT);
     badge_path.push(filename);
 
-    fs::File::open(&badge_path).and_then(|mut file| {
-        let mut bytes = Vec::new();
-        file.read_to_end(&mut bytes)?;
-        Ok(bytes)
-    }).or_else(|_| {
-        // cached file is missing
-        fetch_badge(badge_type, badge_path, name, params)
-    })
+    let mut cache = cache_mutex.lock().map_err(|e| Error::Msg(format!("Error acquiring mutex lock: {}", e)))?;
+    let record = cache.entry(badge_key).or_insert(None);
+    let mut reset_record = false;
+    let bytes = match *record {
+        None => {
+            reset_record = true;
+            fetch_badge(badge_type, badge_path, name, &filetype, params)
+        }
+        Some(ref r) => {
+            let twelve_hrs = Duration::from_std(*LIFESPAN).expect("Failed to convert duration");
+            if UTC::now().signed_duration_since(r.last_refresh) > twelve_hrs {
+                reset_record = true;
+                fetch_badge(badge_type, badge_path, name, &filetype, params)
+            } else {
+                fs::File::open(&badge_path).and_then(|mut file| {
+                    let mut bytes = Vec::new();
+                    file.read_to_end(&mut bytes)?;
+                    Ok(bytes)
+                }).or_else(|_| {
+                    // cached file is missing
+                    reset_record = true;
+                    fetch_badge(badge_type, badge_path, name, &filetype, params)
+                })
+            }
+        }
+    };
+    if reset_record { *record = Some(Record::new()); }
+    bytes
 }
 
 
@@ -117,24 +161,27 @@ fn badge_or_redirect(badge_type: &Badge, name: &str, req: &mut Request) -> IronR
         .to_strict_map::<String>().unwrap();
     let params: UrlParams = params.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
 
-    let name = match name.find(".svg") {
-        Some(n) => &name[..n],
-        None => name,
-    };
+    let name = PathBuf::from(name);
+    let filetype = name.extension().and_then(OsStr::to_str).unwrap_or("svg");
+    let name = name.file_stem().and_then(OsStr::to_str).expect("Failed to extract filename");
 
-    match get_badge(badge_type, name, &params) {
+    let mimetype = match mime_from_filetype(filetype) {
+        Ok(m) => m,
+        Err(_) => return Ok(Response::with((status::BadRequest, format!("Invalid filetype: {}. Accepted: [svg, png, jpg, json]", filetype)))),
+    };
+    match get_badge(req, badge_type, &name, filetype, &params) {
         Err(_) => {
             // Failed to fetch a cached or fresh version, redirect to shields.io
             let url = match *badge_type {
-                Badge::Crate => format!("https://img.shields.io/crates/v/{krate}.svg?label={krate}", krate=name),
-                Badge::Label => format!("https://img.shields.io/badge/{info}.svg?style=social", info=name),
+                Badge::Crate => format!("https://img.shields.io/crates/v/{}.{}", name, filetype),
+                Badge::Label => format!("https://img.shields.io/badge/{}.{}", name, filetype),
             };
-            let url = Url::parse(&url).unwrap();
+            let url = Url::parse_with_params(&url, params).expect("invalid params");
             let url = iron::Url::from_generic_url(url).unwrap();
             Ok(Response::with((status::Found, modifiers::Redirect(url))))
         }
         Ok(bytes) => {
-            Ok(Response::with((SVG.clone(), status::Ok, bytes)))
+            Ok(Response::with((mimetype, status::Ok, bytes)))
         }
     }
 
