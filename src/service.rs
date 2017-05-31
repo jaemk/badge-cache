@@ -8,9 +8,10 @@ use std::path::Path;
 use std::collections::HashMap;
 
 use chrono::{DateTime, UTC};
+use time;
 use iron::prelude::*;
 use iron::middleware::{BeforeMiddleware, AfterMiddleware};
-use iron::headers::{CacheControl, CacheDirective};
+use iron::headers::{CacheControl, CacheDirective, Expires, HttpDate};
 use iron::typemap::Key;
 use router::Router;
 use mount::Mount;
@@ -69,9 +70,12 @@ impl AfterMiddleware for DefaultCacheSettings {
         if resp.headers.get::<CacheControl>().is_none() {
             resp.headers.set(
                 CacheControl(vec![
-                    CacheDirective::MaxAge(3600u32),
+                    CacheDirective::MaxAge(3600u32), // 1hr
                     CacheDirective::Public,
                 ]));
+            resp.headers.set(
+                Expires(HttpDate(time::now() + time::Duration::hours(1)))
+                );
         }
         Ok(resp)
     }

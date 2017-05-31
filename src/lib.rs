@@ -1,4 +1,5 @@
 extern crate chrono;
+extern crate time;
 extern crate clap;
 extern crate reqwest;
 extern crate url;
