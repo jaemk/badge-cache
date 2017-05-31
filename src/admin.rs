@@ -41,7 +41,7 @@ fn clear_cached_files(no_confirm: bool, dir: &str) -> Result<()> {
         confirm(&format!("** Delete everything in {:?}? (y/n) > ", &static_root))?;
     }
     let read_dir = fs::read_dir(&static_root)
-        .map_err(|e| Error::IoErrorMsg(e, format!("Unable to read `STATIC_ROOT` dir: {:?} - make sure you run this from the project root", &static_root)))?;
+        .map_err(|e| Error::Msg(format!("Unable to read `STATIC_ROOT` dir: {:?} - make sure you run this from the project root, {}", &static_root, e)))?;
 
     let mut count = 0;
     for entry in read_dir {

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::ffi::OsStr;
 use std::fs;
 use std::env;
-use std::time;
+use std::time as std_time;
 use std::fmt;
 
 use reqwest;
@@ -17,7 +17,7 @@ use persistent;
 use router::Router;
 use params::Params;
 use mime;
-use chrono::{Duration, UTC};
+use chrono::{self, UTC};
 
 use service::{Cache, Record};
 use errors::*;
@@ -29,7 +29,7 @@ lazy_static! {
         root.push("static/badges");
         root
     };
-    static ref LIFESPAN: time::Duration = time::Duration::new(43200, 0);  // 43200s == 12hrs
+    static ref CACHE_LIFESPAN: chrono::Duration = chrono::Duration::seconds(43200);  // 43200s == 12hrs
     static ref SVG: mime::Mime = "image/svg+xml".parse().expect("failed parsing svg mimetype");
     static ref PNG: mime::Mime = "image/png".parse().expect("failed parsing png mimetype");
     static ref JPG: mime::Mime = "image/jpg".parse().expect("failed parsing jpg mimetype");
@@ -53,9 +53,11 @@ impl fmt::Display for Badge {
 }
 
 
+/// `Url::parse_with_params` expects `&[(k, v), ...]`
 type UrlParams = Vec<(String, String)>;
 
 
+/// Returns an appropriate mime type per file extension
 fn mime_from_filetype(filetype: &str) -> Result<mime::Mime> {
     Ok(match filetype {
         "svg" => SVG.clone(),
@@ -83,7 +85,7 @@ fn fetch_badge(badge_type: &Badge, badge_path: PathBuf, name: &str, filetype: &s
     let url = Url::parse_with_params(&url, params)?;
 
     let mut client = reqwest::Client::new()?;
-    client.timeout(time::Duration::new(3, 0));
+    client.timeout(std_time::Duration::new(3, 0));
     let mut resp = client.get(url.as_str())
         .form(params)
         .send()?;
@@ -104,8 +106,9 @@ fn fetch_badge(badge_type: &Badge, badge_path: PathBuf, name: &str, filetype: &s
 /// Errors:
 ///     * Io/Url/Reqwest errors from `fetch_badge`
 fn get_badge(req: &mut Request, badge_type: &Badge, name: &str, filetype: &str, params: &UrlParams) -> Result<Vec<u8>> {
-    // key for the cache
+    // build key for the cache and filename
     let mut s = String::from(name);
+    s.push('_');
     s.push_str(filetype);
     let badge_key = params.iter().fold(s, |mut s, &(ref k, ref v)| {
         s.push('_');
@@ -115,14 +118,14 @@ fn get_badge(req: &mut Request, badge_type: &Badge, name: &str, filetype: &str, 
         s
     });
 
-    let cache_mutex = req.get::<persistent::Write<Cache>>().unwrap();
-
-    let filename = format!("{}__{}.{}", badge_type, badge_key, filetype);
+    let filename = format!("{}__{}.{}", badge_type, &badge_key, filetype);
 
     let mut badge_path = PathBuf::from(&*STATIC_ROOT);
     badge_path.push(filename);
 
+    let cache_mutex = req.get::<persistent::Write<Cache>>().unwrap();
     let mut cache = cache_mutex.lock().map_err(|e| Error::Msg(format!("Error acquiring mutex lock: {}", e)))?;
+
     let record = cache.entry(badge_key).or_insert(None);
     let mut reset_record = false;
     let bytes = match *record {
@@ -131,11 +134,12 @@ fn get_badge(req: &mut Request, badge_type: &Badge, name: &str, filetype: &str, 
             fetch_badge(badge_type, badge_path, name, &filetype, params)
         }
         Some(ref r) => {
-            let twelve_hrs = Duration::from_std(*LIFESPAN).expect("Failed to convert duration");
-            if UTC::now().signed_duration_since(r.last_refresh) > twelve_hrs {
+            if UTC::now().signed_duration_since(r.last_refresh) > *CACHE_LIFESPAN {
+                // content is expired
                 reset_record = true;
                 fetch_badge(badge_type, badge_path, name, &filetype, params)
             } else {
+                // content is still valid
                 fs::File::open(&badge_path).and_then(|mut file| {
                     let mut bytes = Vec::new();
                     file.read_to_end(&mut bytes)?;
@@ -155,7 +159,7 @@ fn get_badge(req: &mut Request, badge_type: &Badge, name: &str, filetype: &str, 
 
 /// Returns the contents of a request badge defined by its `badge_type`, `name`,
 /// and modifying `params`
-/// If something goes wrong when loading/fetching bytes, redirect to shields.io
+/// If something goes wrong when loading/fetching bytes, redirects to shields.io
 fn badge_or_redirect(badge_type: &Badge, name: &str, req: &mut Request) -> IronResult<Response> {
     let params = req.get_ref::<Params>().unwrap()
         .to_strict_map::<String>().unwrap();
