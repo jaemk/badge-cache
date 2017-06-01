@@ -64,6 +64,7 @@ impl BeforeMiddleware for InfoLog {
 
 /// Custom `CacheControl` header settings
 /// Applies a `Cache-Control: max-age=3600` if no `CacheControl` header is already set.
+/// Applies a `Expires: now + 1hr` if no `Expires` header is already set.
 pub struct DefaultCacheSettings;
 impl AfterMiddleware for DefaultCacheSettings {
     fn after(&self, _req: &mut Request, mut resp: Response) -> IronResult<Response> {
@@ -73,6 +74,8 @@ impl AfterMiddleware for DefaultCacheSettings {
                     CacheDirective::MaxAge(3600u32), // 1hr
                     CacheDirective::Public,
                 ]));
+        }
+        if resp.headers.get::<Expires>().is_none() {
             resp.headers.set(
                 Expires(HttpDate(time::now() + time::Duration::hours(1)))
                 );
