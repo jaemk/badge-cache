@@ -8,6 +8,7 @@ use std::fs;
 use std::env;
 use std::time as std_time;
 use std::fmt;
+use std::thread;
 
 use reqwest;
 use url::Url;
@@ -29,6 +30,7 @@ lazy_static! {
         root
     };
     static ref CACHE_LIFESPAN: chrono::Duration = chrono::Duration::seconds(43200);  // 43200s == 12hrs
+    static ref CLEAN_INTERVAL: std_time::Duration = std_time::Duration::new(3600, 0);
     static ref SVG: mime::Mime = "image/svg+xml".parse().expect("failed parsing svg mimetype");
     static ref PNG: mime::Mime = "image/png".parse().expect("failed parsing png mimetype");
     static ref JPG: mime::Mime = "image/jpg".parse().expect("failed parsing jpg mimetype");
@@ -54,6 +56,56 @@ impl fmt::Display for Badge {
 
 /// `Url::parse_with_params` expects `&[(k, v), ...]`
 type UrlParams = Vec<(String, String)>;
+
+
+/// Cleans up the cache, deleting any expired files.
+///
+/// Errors:
+///     * Unable to acquire mutex lock
+fn wait_and_clear(wait_dur: &std_time::Duration, cache: &Cache) -> Result<usize> {
+    thread::sleep(*wait_dur);
+    let n_removed = {
+        let mut cache = cache.lock().map_err(|e| Error::Msg(format!("[Cleaner] Error obtaining cache lock: {}", e)))?;
+        let stale: Vec<String> = cache.iter().fold(vec![], |mut stale, (key, record)| {
+            if let Some(ref record) = *record {
+                // collect stale keys & delete files
+                if UTC::now().signed_duration_since(record.last_refresh) > *CACHE_LIFESPAN {
+                    stale.push(key.clone());
+                    // ignore failed deletions, file may be missing, any skipped files will
+                    // be cleaned up by the occasional cron
+                    let _ = fs::remove_file(record.path_buf.clone());
+                }
+            }
+            stale
+        });
+        for key in &stale {
+            cache.remove(key);
+        }
+        stale.len()
+    };
+    Ok(n_removed)
+}
+
+
+/// Initialize a cleaning thread with cache access
+pub fn init_cleaner(cache: Cache) {
+    thread::spawn(move ||{
+        let mut wait_dur = *CLEAN_INTERVAL;
+        loop {
+            match wait_and_clear(&wait_dur, &cache) {
+                Ok(n) => {
+                    wait_dur = *CLEAN_INTERVAL;
+                    println!("[Cleaner]: Cleaned and deleted {} stale records", n);
+                }
+                Err(e) =>  {
+                    // cleaner couldn't get a mutex lock, try again in a couple seconds
+                    println!("[Cleaner]: {}", e);
+                    wait_dur = std_time::Duration::new(30, 0);
+                }
+            }
+        }
+    });
+}
 
 
 /// Returns an appropriate mime type per file extension

@@ -1,5 +1,6 @@
 //! Service
 //!  - Initialize persistent cache
+//!  - Initialize cleaning daemon
 //!  - Initialize loggers
 //!  - Mount url endpoints to `handlers` functions
 //!  - Mount static file handler
@@ -89,6 +90,9 @@ pub fn start(host: &str, log_access: bool) {
 
     // setup our cache
     let cache = Arc::new(Mutex::new(HashMap::new()));
+
+    // initialize cleaning thread
+    handlers::init_cleaner(cache.clone());
 
     // initialize handlers with access to our cache
     let handlers_ = handlers::initialize(cache.clone());
