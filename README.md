@@ -26,7 +26,8 @@
         * `sudo systemctl start badge`
         * check the logs `sudo journalctl -f -u badge`
 * Clearing the cache:
-    * Use the `admin` helper to delete cached files
+    * The server will do a sweep of its cache every hour to clear out expired items.
+    * Cached files can be forcefully deleted using the `admin` helper:
         * `target/release/badge-cache admin --clear-cached-badges /<PATH_TO_PROJ>/static/badges`
             * live dangerously: `--no-confirm`
         * Setup a cron job to forcefully delete all cached files every other day:
