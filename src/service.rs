@@ -1,26 +1,26 @@
 //! Service
-//!  - Initialize external and persistent services/structs
+//!  - Initialize persistent cache
 //!  - Initialize loggers
 //!  - Mount url endpoints to `handlers` functions
 //!  - Mount static file handler
 //!
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, UTC};
 use time;
 use iron::prelude::*;
 use iron::middleware::{BeforeMiddleware, AfterMiddleware};
 use iron::headers::{CacheControl, CacheDirective, Expires, HttpDate};
-use iron::typemap::Key;
 use router::Router;
 use mount::Mount;
 use staticfile::Static;
-use persistent::Write;
 use logger;
 use env_logger;
 
 use routes;
+use handlers;
 
 
 pub static DT_FORMAT: &'static str = "%Y-%m-%d_%H:%M:%S";
@@ -28,22 +28,19 @@ pub static DT_FORMAT: &'static str = "%Y-%m-%d_%H:%M:%S";
 
 pub struct Record {
     pub last_refresh: DateTime<UTC>,
+    pub path_buf: PathBuf,
 }
 impl Record {
-    pub fn new() -> Self {
+    pub fn from_path_buf(pb: &PathBuf) -> Self {
         Self {
             last_refresh: UTC::now(),
+            path_buf: pb.clone(),
         }
     }
 }
 
 
-type CacheStore = HashMap<String, Option<Record>>;
-
-
-#[derive(Copy, Clone)]
-pub struct Cache;
-impl Key for Cache { type Value = CacheStore; }
+pub type Cache = Arc<Mutex<HashMap<String, Option<Record>>>>;
 
 
 /// Custom logger to print out access info
@@ -91,18 +88,17 @@ pub fn start(host: &str, log_access: bool) {
     let host = if host.is_empty() { "localhost:3000" } else { host };
 
     // setup our cache
-    let cache = HashMap::new();
-    let persistent_cache = Write::<Cache>::both(cache);
+    let cache = Arc::new(Mutex::new(HashMap::new()));
+
+    // initialize handlers with access to our cache
+    let handlers_ = handlers::initialize(cache.clone());
 
     // mount our url endpoints
     let mut router = Router::new();
-    routes::mount(&mut router);
+    routes::mount(&mut router, &handlers_);
 
     // Initialize our Chain with our router,
     let mut chain = Chain::new(router);
-
-    // Insert our mutable cache into the request.typemap
-    chain.link(persistent_cache);
 
     // Initialize and link our error loggers and CacheControl Middleware
     env_logger::init().unwrap();

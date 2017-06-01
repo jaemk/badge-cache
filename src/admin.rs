@@ -71,7 +71,7 @@ fn clear_cached_files(no_confirm: bool, dir: &str) -> Result<()> {
 pub fn handle(matches: &ArgMatches) -> Result<()> {
     let no_confirm = matches.is_present("no-confirm");
     if let Some(dir) = matches.value_of("badge-dir") {
-        clear_cached_files(no_confirm, &dir)?;
+        clear_cached_files(no_confirm, dir)?;
         return Ok(())
     }
     Ok(())
