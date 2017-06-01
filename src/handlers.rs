@@ -151,6 +151,7 @@ fn fetch_badge(badge_type: &Badge, badge_path: &PathBuf, name: &str, filetype: &
 }
 
 
+/// Create a new `PathBuf` for the given badge parameters in the `STATIC_ROOT`
 fn create_badge_path(badge_type: &Badge, badge_key: &str, filetype: &str) -> PathBuf {
     let filename = format!("{}__{}.{}", badge_type, badge_key, filetype);
     let mut badge_path = PathBuf::from(&*STATIC_ROOT);
@@ -183,17 +184,17 @@ fn get_badge(cache: Cache, badge_type: &Badge, name: &str, filetype: &str, param
     let mut new_record = None;
     let bytes = match *record {
         None => {
+            // No cached `Record` found
             let new_badge_path = create_badge_path(badge_type, &badge_key, filetype);
-            let bytes = fetch_badge(badge_type, &new_badge_path, name, filetype, params);
             new_record = Some(Record::from_path_buf(&new_badge_path));
-            bytes
+            fetch_badge(badge_type, &new_badge_path, name, filetype, params)
         }
         Some(ref r) => {
+            // cached `Record` found
             if UTC::now().signed_duration_since(r.last_refresh) > *CACHE_LIFESPAN {
                 // content is expired
-                let bytes = fetch_badge(badge_type, &r.path_buf, name, filetype, params);
                 new_record = Some(Record::from_path_buf(&r.path_buf));
-                bytes
+                fetch_badge(badge_type, &r.path_buf, name, filetype, params)
             } else {
                 // content is still valid
                 fs::File::open(&r.path_buf).and_then(|mut file| {
@@ -202,9 +203,8 @@ fn get_badge(cache: Cache, badge_type: &Badge, name: &str, filetype: &str, param
                     Ok(bytes)
                 }).or_else(|_| {
                     // cached file is missing
-                    let bytes = fetch_badge(badge_type, &r.path_buf, name, filetype, params);
                     new_record = Some(Record::from_path_buf(&r.path_buf));
-                    bytes
+                    fetch_badge(badge_type, &r.path_buf, name, filetype, params)
                 })
             }
         }
