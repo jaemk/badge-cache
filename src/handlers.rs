@@ -141,6 +141,8 @@ fn fetch_badge(badge_type: &Badge, badge_path: &PathBuf, name: &str, filetype: &
         .form(params)
         .send()?;
 
+    if !resp.status().is_success() { return Err(Error::Msg(format!("HTTP request not successful, status: {}", resp.status()))) }
+
     let mut bytes = Vec::new();
     io::copy(&mut resp, &mut bytes)?;
 
