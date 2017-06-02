@@ -4,11 +4,6 @@
 
 `badge-cache` supports the same url api as `img.shields.io` while enforcing a `Cache-Control: max-age=3600` (1 hr) client-side cache. Badges generated from `img.shields.io` are cached server-side for 12 hrs.
 
-## TODO:
-
-- [ ] Make landing page pretty
-- [ ] Add an endpoint to force a reload of a badge
-
 ## Setup / Usage
 
 > `libssl-dev` is required for `reqwest` for fetching from shields.io
