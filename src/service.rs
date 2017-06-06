@@ -12,9 +12,10 @@ use std::sync::{Arc, Mutex};
 use chrono::{DateTime, UTC};
 use time;
 use iron::prelude::*;
+use iron::status;
 use iron::middleware::{BeforeMiddleware, AfterMiddleware};
 use iron::headers::{CacheControl, CacheDirective, Expires, HttpDate};
-use router::Router;
+use router::{Router, NoRoute};
 use mount::Mount;
 use staticfile::Static;
 use logger;
@@ -83,6 +84,25 @@ impl AfterMiddleware for DefaultCacheSettings {
 }
 
 
+static ERROR_404: &'static str = r##"
+<html>
+<pre>
+Nothing to see here... <img src="/badge/~(=^.^)-meow-yellow.svg?style=social"/>
+</pre>
+</html>
+"##;
+
+struct Error404;
+impl AfterMiddleware for Error404 {
+    fn catch(&self, _req: &mut Request, e: IronError) -> IronResult<Response> {
+        if let Some(_) = e.error.downcast::<NoRoute>() {
+            return Ok(Response::with((status::NotFound, mime!(Text/Html), ERROR_404)))
+        }
+        Err(e)
+    }
+}
+
+
 /// Initialize server
 pub fn start(host: &str, log_access: bool) {
     // get default host
@@ -110,6 +130,7 @@ pub fn start(host: &str, log_access: bool) {
     chain.link_before(log_before);
     chain.link_after(DefaultCacheSettings);
     chain.link_after(log_after);
+    chain.link_after(Error404);
 
     // Link our access logger if we're logging
     if log_access {
