@@ -353,10 +353,16 @@ pub fn initialize(cache: Cache) -> Handlers {
 }
 
 
+/// Return rendered template response
+fn render_to_req(req: &mut Request, template_name: &str, context: Context) -> IronResult<Response> {
+    let tera = get_templates!(req);
+    let content = tera.render(template_name, &context).expect("Template render failed. Oh well.");
+    Ok(Response::with((mime!(Text/Html), status::Ok, content)))
+}
+
+
 /// Handle requests for "/" landing page
 pub fn landing(req: &mut Request) -> IronResult<Response> {
-    let tera = get_templates!(req);
     let c = Context::new();
-    let content = tera.render("landing.html", &c).expect("Template render failed. Oh well.");
-    Ok(Response::with((mime!(Text/Html), status::Ok, content)))
+    render_to_req(req, "landing.html", c)
 }
