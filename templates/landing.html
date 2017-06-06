@@ -1,14 +1,7 @@
-<html>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <head>
-        <title> badge-cache.rs </title>
-        <link rel="shortcut icon" href="/favicon.ico?v=1" type="image/x-icon">
-        <link rel="icon" href="/favicon.ico?v=1" type="image/x-icon">
-    </head>
+{% extends "base.html" %}
 
-    <body>
-        <pre>
+{% block content %}
+<pre>
 Welcome to badge-cache!
 
 Usage:
@@ -41,11 +34,12 @@ Usage:
         ex.
             curl -X POST https://badge-cache.kominick.com/reset/crate/mime.jpg?label=mime
             curl -X POST https://badge-cache.kominick.com/reset/crates/v/mime.jpg?label=mime
-        </pre>
-    </body>
+</pre>
+{% endblock content %}
 
-    <a href="https://github.com/jaemk/badge-cache"><img style="width: 32px;" src="static/github.png" /></a>
-    <script>
+
+{% block script %}
+<script>
 document.addEventListener("DOMContentLoaded", function() {
     console.log("hey");
     var jsonInfo = document.getElementById('json-info');
@@ -58,5 +52,5 @@ document.addEventListener("DOMContentLoaded", function() {
     }
     http.send();
 });
-    </script>
-</html>
+</script>
+{% endblock script %}

@@ -14,12 +14,14 @@ use reqwest;
 use url::Url;
 use iron::prelude::*;
 use iron::{self, status, modifiers, Handler};
+use persistent;
 use router::Router;
 use params::Params;
 use mime;
 use chrono::{self, UTC};
+use tera::Context;
 
-use service::{Cache, Record};
+use service::{Cache, Record, Templates};
 use errors::*;
 
 
@@ -35,6 +37,18 @@ lazy_static! {
     static ref PNG: mime::Mime = "image/png".parse().expect("failed parsing png mimetype");
     static ref JPG: mime::Mime = "image/jpg".parse().expect("failed parsing jpg mimetype");
     static ref JSON: mime::Mime = "application/json".parse().expect("failed parsing json mimetype");
+}
+
+
+/// Helper for pulling out persistent template engine
+macro_rules! get_templates {
+    ($request:expr) => {
+        {
+            let arc = $request.get::<persistent::Read<Templates>>()
+                .expect("failed to extract persistent template engine");
+            arc.clone()
+        }
+    }
 }
 
 
@@ -336,4 +350,13 @@ pub fn initialize(cache: Cache) -> Handlers {
         badge_handler: BadgeHandler { cache: cache.clone() },
         reset_badge_handler: ResetBadgeHandler { cache: cache.clone() },
     }
+}
+
+
+/// Handle requests for "/" landing page
+pub fn landing(req: &mut Request) -> IronResult<Response> {
+    let tera = get_templates!(req);
+    let c = Context::new();
+    let content = tera.render("landing.html", &c).expect("Template render failed. Oh well.");
+    Ok(Response::with((mime!(Text/Html), status::Ok, content)))
 }

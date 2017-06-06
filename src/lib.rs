@@ -6,6 +6,7 @@ extern crate url;
 #[macro_use] extern crate lazy_static;
 
 #[macro_use] extern crate mime;
+#[macro_use] extern crate tera;
 extern crate params;
 
 extern crate iron;

@@ -14,13 +14,16 @@ use chrono::{DateTime, UTC};
 use time;
 use iron::prelude::*;
 use iron::status;
+use iron::typemap::Key;
 use iron::middleware::{BeforeMiddleware, AfterMiddleware};
 use iron::headers::{CacheControl, CacheDirective, Expires, HttpDate};
+use persistent::Read;
 use router::{Router, NoRoute};
 use mount::Mount;
 use staticfile::Static;
 use logger;
 use env_logger;
+use tera::Tera;
 
 use routes;
 use handlers;
@@ -48,6 +51,13 @@ impl Record {
 }
 
 
+#[derive(Copy, Clone)]
+/// Tera template `iron::typemap` type
+pub struct Templates;
+impl Key for Templates { type Value = Tera; }
+
+
+/// Alias for our cross thread cache
 pub type Cache = Arc<Mutex<HashMap<String, Option<Record>>>>;
 
 
@@ -115,6 +125,10 @@ pub fn start(host: &str, log_access: bool) {
     // get default host
     let host = if host.is_empty() { "localhost:3000" } else { host };
 
+    // Initialize template engine
+    let mut tera = compile_templates!("templates/**/*");
+    tera.autoescape_on(vec!["html"]);
+
     // setup our cache
     let cache = Arc::new(Mutex::new(HashMap::new()));
 
@@ -131,13 +145,18 @@ pub fn start(host: &str, log_access: bool) {
     // Initialize our Chain with our router,
     let mut chain = Chain::new(router);
 
-    // Initialize and link our error loggers and CacheControl Middleware
+    // Initialize and link:
+    // - Error loggers
+    // - CacheControl Middleware
+    // - Custom 404 handler
+    // - Persistent template engine access
     env_logger::init().unwrap();
     let (log_before, log_after) = logger::Logger::new(None);
     chain.link_before(log_before);
     chain.link_after(DefaultCacheSettings);
     chain.link_after(log_after);
     chain.link_after(Error404);
+    chain.link(Read::<Templates>::both(tera));
 
     // Link our access logger if we're logging
     if log_access {
