@@ -46,7 +46,7 @@ pub type Cache = Arc<Mutex<HashMap<String, Option<Record>>>>;
 
 
 /// Custom logger to print out access info
-pub struct InfoLog;
+struct InfoLog;
 impl BeforeMiddleware for InfoLog {
     fn before(&self, req: &mut Request) -> IronResult<()> {
         let now = UTC::now().format(DT_FORMAT).to_string();
@@ -64,7 +64,7 @@ impl BeforeMiddleware for InfoLog {
 /// Custom `CacheControl` header settings
 /// Applies a `Cache-Control: max-age=3600` if no `CacheControl` header is already set.
 /// Applies a `Expires: now + 1hr` if no `Expires` header is already set.
-pub struct DefaultCacheSettings;
+struct DefaultCacheSettings;
 impl AfterMiddleware for DefaultCacheSettings {
     fn after(&self, _req: &mut Request, mut resp: Response) -> IronResult<Response> {
         if resp.headers.get::<CacheControl>().is_none() {
@@ -86,12 +86,13 @@ impl AfterMiddleware for DefaultCacheSettings {
 
 static ERROR_404: &'static str = r##"
 <html>
-<pre>
-Nothing to see here... <img src="/badge/~(=^.^)-meow-yellow.svg?style=social"/>
-</pre>
+    <pre>
+        Nothing to see here... <img src="/badge/~(=^.^)-meow-yellow.svg?style=social"/>
+    </pre>
 </html>
 "##;
 
+/// Custom 404 Error handler/content
 struct Error404;
 impl AfterMiddleware for Error404 {
     fn catch(&self, _req: &mut Request, e: IronError) -> IronResult<Response> {
