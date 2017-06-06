@@ -8,6 +8,7 @@
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::fs;
 
 use chrono::{DateTime, UTC};
 use time;
@@ -23,6 +24,7 @@ use env_logger;
 
 use routes;
 use handlers;
+use errors::*;
 
 
 pub static DT_FORMAT: &'static str = "%Y-%m-%d_%H:%M:%S";
@@ -38,6 +40,10 @@ impl Record {
             last_refresh: UTC::now(),
             path_buf: pb.clone(),
         }
+    }
+    pub fn delete_file(self) -> Result<()> {
+        fs::remove_file(&self.path_buf)?;
+        Ok(())
     }
 }
 

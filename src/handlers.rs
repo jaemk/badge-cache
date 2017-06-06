@@ -162,6 +162,21 @@ fn create_badge_path(badge_type: &Badge, badge_key: &str, filetype: &str) -> Pat
 }
 
 
+/// Create a new key identifier from badge and url info
+fn create_badge_key(name: &str, filetype: &str, params: &UrlParams) -> String {
+    let mut s = String::from(name);
+    s.push('_');
+    s.push_str(filetype);
+    params.iter().fold(s, |mut s, &(ref k, ref v)| {
+        s.push('_');
+        s.push_str(k);
+        s.push('_');
+        s.push_str(v);
+        s
+    })
+}
+
+
 /// Returns bytes of the requested badge
 /// Tries to find a cached file, falls back to fetching a fresh badge from shields.io
 ///
@@ -169,16 +184,7 @@ fn create_badge_path(badge_type: &Badge, badge_key: &str, filetype: &str) -> Pat
 ///     * Io/Url/Reqwest errors from `fetch_badge`
 fn get_badge(cache: Cache, badge_type: &Badge, name: &str, filetype: &str, params: &UrlParams) -> Result<Vec<u8>> {
     // build key for the cache and filename
-    let mut s = String::from(name);
-    s.push('_');
-    s.push_str(filetype);
-    let badge_key = params.iter().fold(s, |mut s, &(ref k, ref v)| {
-        s.push('_');
-        s.push_str(k);
-        s.push('_');
-        s.push_str(v);
-        s
-    });
+    let badge_key = create_badge_key(name, filetype, params);
 
     let mut cache = cache.lock().map_err(|e| Error::Msg(format!("Error acquiring mutex lock: {}", e)))?;
 
@@ -278,9 +284,49 @@ impl Handler for BadgeHandler {
 }
 
 
+#[derive(Clone)]
+/// handle requests for
+/// - /reset/crate/:cratename
+/// - /reset/crates/v/:cratename
+/// - /reset/badge/:badgeinfo
+pub struct ResetBadgeHandler {
+    cache: Cache,
+}
+impl Handler for ResetBadgeHandler {
+    fn handle(&self, req: &mut Request) -> IronResult<Response> {
+        let name = {
+            let router_params = req.extensions.get::<Router>().expect("failed to extract router params");
+            if let Some(crate_name) = router_params.find("cratename") {
+                crate_name.to_string()
+            } else if let Some(badge_name) = router_params.find("badgeinfo") {
+                badge_name.to_string()
+            } else {
+                unreachable!()
+            }
+        };
+        let params = req.get_ref::<Params>().unwrap()
+            .to_strict_map::<String>().unwrap();
+        let params: UrlParams = params.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+
+        let name = PathBuf::from(name);
+        let filetype = name.extension().and_then(OsStr::to_str).unwrap_or("svg");
+        let name = name.file_stem().and_then(OsStr::to_str).expect("Failed to extract filename");
+
+        let badge_key = create_badge_key(&name, &filetype, &params);
+        let mut cache = self.cache.lock().expect("Failed to aquire mutex lock. Just die.");
+        if let Some(record) = cache.remove(&badge_key) {
+            // ignore file deletion errors
+            record.map(Record::delete_file);
+        }
+        Ok(Response::with((JSON.clone(), status::Ok, r##"{"ok": "ok", "msg": "it's reset!"}"##)))
+    }
+}
+
+
 /// Collection of `struct`s that `impl` `iron::Handler`
 pub struct Handlers {
     pub badge_handler: BadgeHandler,
+    pub reset_badge_handler: ResetBadgeHandler,
 }
 
 
@@ -288,5 +334,6 @@ pub struct Handlers {
 pub fn initialize(cache: Cache) -> Handlers {
     Handlers {
         badge_handler: BadgeHandler { cache: cache.clone() },
+        reset_badge_handler: ResetBadgeHandler { cache: cache.clone() },
     }
 }
