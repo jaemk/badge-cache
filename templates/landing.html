@@ -31,6 +31,7 @@ Usage:
 
 
     - Force a server cache reset:
+        See the <a href="/reset">reset page</a>, or use the api directly:
         ex.
             curl -X POST https://badge-cache.kominick.com/reset/crate/mime.jpg?label=mime
             curl -X POST https://badge-cache.kominick.com/reset/crates/v/mime.jpg?label=mime
@@ -41,7 +42,6 @@ Usage:
 {% block script %}
 <script>
 document.addEventListener("DOMContentLoaded", function() {
-    console.log("hey");
     var jsonInfo = document.getElementById('json-info');
     http = new XMLHttpRequest();
     var url = '/crate/mime.json?label=mime';

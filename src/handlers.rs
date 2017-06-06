@@ -361,6 +361,13 @@ fn render_to_req(req: &mut Request, template_name: &str, context: Context) -> Ir
 }
 
 
+/// Handle requests for "/reset" cache reset page
+pub fn reset_page(req: &mut Request) -> IronResult<Response> {
+    let c = Context::new();
+    render_to_req(req, "reset.html", c)
+}
+
+
 /// Handle requests for "/" landing page
 pub fn landing(req: &mut Request) -> IronResult<Response> {
     let c = Context::new();

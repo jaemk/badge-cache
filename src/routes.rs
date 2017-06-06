@@ -14,7 +14,7 @@ pub fn mount(router: &mut Router, handlers: &Handlers) {
     router.post("/reset/crates/v/:cratename",   handlers.reset_badge_handler.clone(), "reset_crates");
     router.post("/reset/crate/:cratename",      handlers.reset_badge_handler.clone(), "reset_crate");
     router.post("/reset/badge/:badgeinfo",      handlers.reset_badge_handler.clone(), "reset_badge");
-    //router.get("/reset",                        Static::new("static/reset.html"),     "reset");
+    router.get("/reset",                        handlers::reset_page,                 "reset");
 
     router.get("/robots.txt",           Static::new("static/robots.txt"), "robots");
     router.get("/",                     handlers::landing, "home");

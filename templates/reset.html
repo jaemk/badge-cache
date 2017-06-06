@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block content %}
+<a href="/">Home</a>
+<div>
+    <span id="resp-block" style="display: none;"></span>
+    <div>
+        Enter the url of the badge you want to reset:
+        <br/>
+        <code>
+            ex. /crate/mime.jpg?label=mime&style=flat-square
+        </code>
+    </div>
+    <form id="reset-form">
+        <input id="reset-uri" type="text"/>
+        <input id="reset-button" type="button" value="reset"/>
+    </form>
+</div>
+{% endblock content %}
+
+
+{% block script %}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    var resetButton =   document.getElementById('reset-button');
+    var resetForm =     document.getElementById('reset-form');
+    var respBlock =     document.getElementById('resp-block');
+    var uriElem =       document.getElementById('reset-uri');
+
+    var submit = function(e) {
+        e.preventDefault();
+        let uri = uriElem.value;
+        while (uri.charAt(0) === '/') {
+            uri = uri.substr(1);
+        }
+        http = new XMLHttpRequest();
+        var url = '/reset/' + uri;
+        http.open("POST", url, true);
+        http.onreadystatechange = function() {
+            if (http.readyState !== XMLHttpRequest.DONE || http.status !== 200) {
+                if (http.status >= 500) {
+                    respBlock.textContent = "Something bad happened";
+                    respBlock.style.cssText = "color: red;";
+                } else if (http.status >= 400) {
+                    respBlock.textContent = "That's not a valid url!";
+                    respBlock.style.cssText = "color: red;";
+                }
+                return;
+            }
+            respBlock.textContent = "Reset successful!";
+            respBlock.style.cssText = "color: green;";
+            uriElem.value = '';
+        }
+        http.send();
+    };
+
+    resetButton.addEventListener('click', submit);
+    resetForm.addEventListener('submit', submit);
+
+});
+</script>
+{% endblock script %}
