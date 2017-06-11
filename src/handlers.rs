@@ -142,7 +142,8 @@ fn mime_from_filetype(filetype: &str) -> Result<mime::Mime> {
 ///     * Network errors from reqwest
 ///     * Io errors from copying badge content or writing it to file
 fn fetch_badge(badge_type: &Badge, badge_path: &PathBuf, name: &str, filetype: &str, params: &UrlParams) -> Result<Vec<u8>> {
-    println!("[LOG]: fetching fresh badge ({}) -> {:?}", badge_type, badge_path);
+    use reqwest::header::ContentLength;
+
     let url = match *badge_type {
         Badge::Crate => format!("https://img.shields.io/crates/v/{}.{}", name, filetype),
         Badge::Label => format!("https://img.shields.io/badge/{}.{}", name, filetype),
@@ -156,8 +157,13 @@ fn fetch_badge(badge_type: &Badge, badge_path: &PathBuf, name: &str, filetype: &
         .send()?;
 
     if !resp.status().is_success() { return Err(Error::Msg(format!("HTTP request not successful, status: {}", resp.status()))) }
+    println!("[LOG]: saving fresh badge ({}) -> {:?}", badge_type, badge_path);
 
-    let mut bytes = Vec::new();
+    let ct_len = resp.headers().get::<ContentLength>()
+        .map(|ct_len| **ct_len)
+        .unwrap_or(0);
+
+    let mut bytes = Vec::with_capacity(ct_len as usize);
     io::copy(&mut resp, &mut bytes)?;
 
     let mut file = fs::File::create(badge_path)?;
