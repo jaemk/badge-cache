@@ -109,11 +109,11 @@ pub fn init_cleaner(cache: Cache) {
             match wait_and_clear(&wait_dur, &cache) {
                 Ok(n) => {
                     wait_dur = *CLEAN_INTERVAL;
-                    println!("[Cleaner]: Cleaned and deleted {} stale records", n);
+                    info!("Cleaner: Cleaned and deleted {} stale records", n);
                 }
                 Err(e) =>  {
                     // cleaner couldn't get a mutex lock, try again in a couple seconds
-                    println!("[Cleaner]: {}", e);
+                    error!("Cleaner: {}", e);
                     wait_dur = std_time::Duration::new(30, 0);
                 }
             }

@@ -9,13 +9,14 @@ use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::fs;
+use std::env;
 
-use chrono::{DateTime, UTC};
+use chrono::{DateTime, UTC, Local};
 use time;
 use iron::prelude::*;
 use iron::status;
 use iron::typemap::Key;
-use iron::middleware::{BeforeMiddleware, AfterMiddleware};
+use iron::middleware::AfterMiddleware;
 use iron::headers::{CacheControl, CacheDirective, Expires, HttpDate};
 use persistent::Read;
 use router::{Router, NoRoute};
@@ -59,22 +60,6 @@ impl Key for Templates { type Value = Tera; }
 
 /// Alias for our cross thread cache
 pub type Cache = Arc<Mutex<HashMap<String, Option<Record>>>>;
-
-
-/// Custom logger to print out access info
-struct InfoLog;
-impl BeforeMiddleware for InfoLog {
-    fn before(&self, req: &mut Request) -> IronResult<()> {
-        let now = UTC::now().format(DT_FORMAT).to_string();
-        println!("[{:?}][{}]: {}", req.method, now, req.url);
-        Ok(())
-    }
-    fn catch(&self, req: &mut Request, err: IronError) -> IronResult<()> {
-        let now = UTC::now().format(DT_FORMAT).to_string();
-        println!("[{:?}][{}]: {} -> {}", req.method, now, req.url, err);
-        Err(err)
-    }
-}
 
 
 /// Custom `CacheControl` header settings
@@ -121,7 +106,7 @@ impl AfterMiddleware for Error404 {
 
 
 /// Initialize server
-pub fn start(host: &str, log_access: bool) {
+pub fn start(host: &str) {
     // get default host
     let host = if host.is_empty() { "localhost:3000" } else { host };
 
@@ -146,22 +131,35 @@ pub fn start(host: &str, log_access: bool) {
     let mut chain = Chain::new(router);
 
     // Initialize and link:
-    // - Error loggers
+    // - Loggers
     // - CacheControl Middleware
     // - Custom 404 handler
     // - Persistent template engine access
-    env_logger::init().unwrap();
-    let (log_before, log_after) = logger::Logger::new(None);
+
+    // Set a custom logging format & change the env-var to "LOG"
+    // e.g. LOG=info badge-cache serve
+    env_logger::LogBuilder::new()
+        .format(|record| {
+            format!("{} [{}] - [{}] -> {}",
+                Local::now().format("%Y-%m-%d_%H:%M:%S"),
+                record.level(),
+                record.location().module_path(),
+                record.args()
+                )
+            })
+        .parse(&env::var("LOG").unwrap_or_default())
+        .init()
+        .expect("failed to initialize logger");
+
+    // iron request-middleware loggers
+    let format = logger::Format::new("[{request-time}] [{status}] {method} {uri}").unwrap();
+    let (log_before, log_after) = logger::Logger::new(Some(format));
+
     chain.link_before(log_before);
     chain.link_after(DefaultCacheSettings);
     chain.link_after(log_after);
     chain.link_after(Error404);
     chain.link(Read::<Templates>::both(tera));
-
-    // Link our access logger if we're logging
-    if log_access {
-        chain.link_before(InfoLog);
-    }
 
     // mount our chain of services and a static file handler
     let mut mount = Mount::new();
@@ -169,6 +167,6 @@ pub fn start(host: &str, log_access: bool) {
          .mount("/favicon.ico", Static::new(Path::new("static/favicon.ico")))
          .mount("/static/", Static::new(Path::new("static")));
 
-    println!(" ** Serving at {}", host);
+    info!(" ** Serving at {} **", host);
     Iron::new(mount).http(host).unwrap();
 }

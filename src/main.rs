@@ -1,6 +1,7 @@
 extern crate badge_cache;
 #[macro_use] extern crate clap;
 
+use std::env;
 use badge_cache::service;
 use badge_cache::errors::*;
 use badge_cache::admin;
@@ -21,9 +22,9 @@ pub fn main() {
                     .arg(Arg::with_name("public")
                          .long("public")
                          .help("Serve on '0.0.0.0' instead of 'localhost'"))
-                    .arg(Arg::with_name("silent")
-                         .long("errors-only")
-                         .help("Don't output any logging info")))
+                    .arg(Arg::with_name("log")
+                         .long("log")
+                         .help("Output logging info. Shortcut for settings env-var LOG=info")))
         .subcommand(SubCommand::with_name("admin")
                     .about("admin functions")
                     .arg(Arg::with_name("badge-dir")
@@ -45,11 +46,13 @@ pub fn main() {
 
 fn run(matches: &ArgMatches) -> Result<()> {
     if let Some(serve_matches) = matches.subcommand_matches("serve") {
+        if serve_matches.is_present("log") {
+            env::set_var("LOG", "info");
+        }
         let port = serve_matches.value_of("port").unwrap_or("3000");
         let host_base = if serve_matches.is_present("public") { "0.0.0.0" } else { "localhost" };
         let host = format!("{}:{}", host_base, port);
-        let do_log = !serve_matches.is_present("silent");
-        service::start(&host, do_log);
+        service::start(&host);
         return Ok(());
     }
 

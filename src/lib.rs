@@ -15,6 +15,8 @@ extern crate persistent;
 extern crate staticfile;
 extern crate mount;
 extern crate logger;
+
+#[macro_use] extern crate log;
 extern crate env_logger;
 
 pub mod service;
