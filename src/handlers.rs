@@ -79,7 +79,7 @@ type UrlParams = Vec<(String, String)>;
 fn wait_and_clear(wait_dur: &std_time::Duration, cache: &Cache) -> Result<usize> {
     thread::sleep(*wait_dur);
     let n_removed = {
-        let mut cache = cache.lock().map_err(|e| Error::Msg(format!("[Cleaner] Error obtaining cache lock: {}", e)))?;
+        let mut cache = cache.lock().map_err(|e| format_err!("Error obtaining cache lock: {}", e))?;
         let stale: Vec<String> = cache.iter().fold(vec![], |mut stale, (key, record)| {
             if let Some(ref record) = *record {
                 // collect stale keys & delete files
@@ -206,7 +206,7 @@ fn get_badge(cache: Cache, badge_type: &Badge, name: &str, filetype: &str, param
     // build key for the cache and filename
     let badge_key = create_badge_key(name, filetype, params);
 
-    let mut cache = cache.lock().map_err(|e| Error::Msg(format!("Error acquiring mutex lock: {}", e)))?;
+    let mut cache = cache.lock().map_err(|e| format_err!("Error acquiring mutex lock: {}", e))?;
 
     let record = cache.entry(badge_key.clone()).or_insert(None);
     let mut new_record = None;

@@ -19,12 +19,32 @@ extern crate logger;
 #[macro_use] extern crate log;
 extern crate env_logger;
 
+
+/// Construct an `Error::Msg` from a literal or format-string-and-args
+macro_rules! format_err {
+    ($literal:expr) => {
+        Error::from($literal)
+    };
+    ($literal:expr, $($arg:expr),*) => {
+        Error::from(format!($literal, $($arg),*))
+    }
+}
+
+/// Construct a `return Err(Error::Msg)` from a literal or format-string-and-args
+macro_rules! bail {
+    ($literal:expr) => {
+        return Err(format_err!($literal))
+    };
+    ($literal:expr, $($arg:expr),*) => {
+        return Err(format_err!($literal, $($arg),*))
+    }
+}
+
+
 pub mod service;
 pub mod handlers;
 pub mod routes;
 pub mod admin;
-
-use std::fmt;
 
 
 #[derive(Debug)]
@@ -36,6 +56,16 @@ pub enum Error {
     Reqwest(reqwest::Error),
 }
 
+pub type Result<T> = std::result::Result<T, Error>;
+
+/// So we can glob import `use errors::*;`
+pub mod errors {
+    pub use super::Error;
+    pub use super::Result;
+}
+
+
+use std::fmt;
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Error::*;
@@ -54,20 +84,28 @@ impl From<std::io::Error> for Error {
         Error::IoError(error)
     }
 }
+
 impl From<url::ParseError> for Error {
     fn from(error: url::ParseError) -> Error {
         Error::UrlParseError(error)
     }
 }
+
 impl From<reqwest::Error> for Error {
     fn from(error: reqwest::Error) -> Error {
         Error::Reqwest(error)
     }
 }
 
-pub type Result<T> = std::result::Result<T, Error>;
-
-pub mod errors {
-    pub use super::Error;
-    pub use super::Result;
+impl<'a> From<&'a str> for Error {
+    fn from(s: &'a str) -> Error {
+        Error::Msg(String::from(s))
+    }
 }
+
+impl From<String> for Error {
+    fn from(s: String) -> Error {
+        Error::Msg(s)
+    }
+}
+

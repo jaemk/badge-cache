@@ -10,9 +10,10 @@ use std::ffi::OsStr;
 use clap::ArgMatches;
 use chrono::UTC;
 
-use service::DT_FORMAT;
 use errors::*;
 
+
+static DT_FORMAT: &'static str = "%Y-%m-%d_%H:%M:%S";
 
 fn default_static_root() -> PathBuf {
     let mut root = env::current_dir().expect("Failed to get the current directory");
@@ -29,7 +30,7 @@ fn confirm(msg: &str) -> Result<()> {
     let stdin = ::std::io::stdin();
     stdin.read_line(&mut input).expect("Error reading stdin");
     if input.trim().to_lowercase() == "y" { return Ok(()) }
-    Err(Error::Msg("Unable to confirm...".to_string()))
+    bail!("Unable to confirm...")
 }
 
 
@@ -41,7 +42,7 @@ fn clear_cached_files(no_confirm: bool, dir: &str) -> Result<()> {
         confirm(&format!("** Delete everything in {:?}? (y/n) > ", &static_root))?;
     }
     let read_dir = fs::read_dir(&static_root)
-        .map_err(|e| Error::Msg(format!("Unable to read `STATIC_ROOT` dir: {:?} - make sure you run this from the project root, {}", &static_root, e)))?;
+        .map_err(|e| format_err!("Unable to read `STATIC_ROOT` dir: {:?} - make sure you run this from the project root, {}", &static_root, e))?;
 
     let mut count = 0;
     for entry in read_dir {

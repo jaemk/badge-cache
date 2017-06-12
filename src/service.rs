@@ -31,9 +31,6 @@ use handlers;
 use errors::*;
 
 
-pub static DT_FORMAT: &'static str = "%Y-%m-%d_%H:%M:%S";
-
-
 pub struct Record {
     pub last_refresh: DateTime<UTC>,
     pub path_buf: PathBuf,
