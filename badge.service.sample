@@ -12,7 +12,7 @@ Description=Badge-cache App Server
 
 [Service]
 WorkingDirectory=/<PATH_TO_PROJ_DIR>/badge-cache
-ExecStart=/<PATH_TO_EXEC>/badge-cache serve --port <PORT>
+ExecStart=/<PATH_TO_EXEC>/badge-cache serve --port <PORT> --log
 
 [Install]
 WantedBy=multi-user.target
