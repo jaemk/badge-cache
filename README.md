@@ -1,4 +1,4 @@
-# Badge-rs
+# Badge-rs [![Build Status](https://travis-ci.org/jaemk/badge-cache.svg?branch=master)](https://travis-ci.org/jaemk/badge-cache)
 
 > Simple `img.shields.io` cache for rust crates and generic badges
 
