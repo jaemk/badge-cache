@@ -143,6 +143,7 @@ fn mime_from_filetype(filetype: &str) -> Result<mime::Mime> {
 ///     * Io errors from copying badge content or writing it to file
 fn fetch_badge(badge_type: &Badge, badge_path: &PathBuf, name: &str, filetype: &str, params: &UrlParams) -> Result<Vec<u8>> {
     use reqwest::header::ContentLength;
+    use reqwest::header::ContentType;
 
     let url = match *badge_type {
         Badge::Crate => format!("https://img.shields.io/crates/v/{}.{}", name, filetype),
@@ -156,8 +157,31 @@ fn fetch_badge(badge_type: &Badge, badge_path: &PathBuf, name: &str, filetype: &
         .form(params)
         .send()?;
 
-    if !resp.status().is_success() { return Err(Error::Msg(format!("HTTP request not successful, status: {}", resp.status()))) }
-    println!("[LOG]: saving fresh badge ({}) -> {:?}", badge_type, badge_path);
+    if !resp.status().is_success() { bail!("HTTP request not successful, status: {}", resp.status()) }
+    {
+        // verify content-type
+        use reqwest::mime::Mime;
+        use reqwest::mime::TopLevel::{Image, Application};
+        use reqwest::mime::SubLevel::{Png, Json};
+        let ct = match resp.headers().get::<ContentType>() {
+            Some(ct) => ct,
+            None => bail!("No content-type specified"),
+        };
+        match **ct {
+            Mime(Image, Png, _) if filetype == "png" => (),
+            Mime(Application, Json, _) if filetype == "json" => (),
+            Mime(_, ref sub, _) => {
+                if filetype == "svg" && (&*sub == "xml+svg" || &*sub == "svg+xml") {
+                    // ok
+                } else if (filetype == "jpg" || filetype == "jpeg") && &*sub == "jpg" {
+                    // ok
+                } else {
+                    bail!("Invalid content-type. Expected {}, got {}", filetype, ct)
+                }
+            }
+        };
+    }
+    info!("saving fresh badge ({}) -> {:?}", badge_type, badge_path);
 
     let ct_len = resp.headers().get::<ContentLength>()
         .map(|ct_len| **ct_len)
