@@ -9,6 +9,7 @@
 # journalctl -f -u badge
 [Unit]
 Description=Badge-cache App Server
+Requires=After=nginx.service
 
 [Service]
 WorkingDirectory=/<PATH_TO_PROJ_DIR>/badge-cache
