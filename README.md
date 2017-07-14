@@ -16,7 +16,7 @@
         * ! don't turn on the secure redirect or the `Strict-Transport-Security max-age` unless you already have your cert
         * `sudo nginx -t`
         * `sudo systemctl restart nginx`
-    * copy `badge.service.sample` to `/etc/systemd/system/badge.service` and update with your project info
+    * copy `badge.service.sample` to `/lib/systemd/system/badge.service` and update with your project info
         * `sudo systemctl enable badge`
         * `sudo systemctl start badge`
         * check the logs `sudo journalctl -f -u badge`

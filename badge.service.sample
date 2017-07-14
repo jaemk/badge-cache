@@ -1,10 +1,10 @@
 # systemd config
-# copy to /etc/systemd/system/badge.service
+# copy to /lib/systemd/system/badge.service
 #
+# systemctl daemon-reload
 # systemctl enable badge.service
 # systemctl start badge
 # systemctl status badge.service
-# systemctl daemon-reload
 # # tail the log
 # journalctl -f -u badge
 [Unit]
