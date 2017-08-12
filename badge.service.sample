@@ -14,6 +14,7 @@ Requires=nginx.service
 [Service]
 WorkingDirectory=/<PATH_TO_PROJ_DIR>/badge-cache
 ExecStart=/<PATH_TO_EXEC>/badge-cache serve --port <PORT> --log
+Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
