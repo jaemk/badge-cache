@@ -1,4 +1,4 @@
-# Badge-rs [![Build Status](https://travis-ci.org/jaemk/badge-cache.svg?branch=master)](https://travis-ci.org/jaemk/badge-cache)
+# Badge-Cache [![Build Status](https://travis-ci.org/jaemk/badge-cache.svg?branch=master)](https://travis-ci.org/jaemk/badge-cache)
 
 > Simple `img.shields.io` cache for rust crates and generic badges
 
@@ -21,7 +21,6 @@
     * The server will do a sweep of its cache every hour to clear out expired items.
     * Cached files can be forcefully deleted using the `admin` helper:
         * `target/release/badge-cache admin --clear-cached-badges /<PATH_TO_PROJ>/static/badges`
-            * live dangerously: `--no-confirm`
         * Setup a cron job to forcefully delete all cached files every other day:
             * `0 0 2-30/2 * * /<PATH_TO_PROJ>/target/release/badge-cache admin --clear-cached-badges /<PATH_TO_PROJ>/static/badges --no-confirm >> /var/log/badge.log 2>&1`
 
