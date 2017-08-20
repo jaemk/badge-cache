@@ -6,3 +6,5 @@ Cargo.lock
 **/badges/*.jpg
 **/badges/*.json
 nginx.conf
+.update-config
+bin/
