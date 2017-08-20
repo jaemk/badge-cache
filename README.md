@@ -6,14 +6,11 @@
 
 ## Setup / Usage
 
-> `libssl-dev` is required on linux for `reqwest`
-
-* Run a dev instance `cargo run -- serve --log` -> `localhost:3000`
-* Expose a direct instance to the world `cargo build --release`, `sudo target/release/badge-cache serve --public --port 80`
+* Download the latest release: `./update.py run`
+* Expose a direct instance to the world `bin/badge-cache serve --public --port 80 --log`
 * Setup behind a proxy
     * setup ssl certs (if you want), see `letsencrypt.info`
     * copy `nginx.conf.sample` to `/etc/nginx/sites-available/badge` and update with your project/site info
-        * ! don't turn on the secure redirect or the `Strict-Transport-Security max-age` unless you already have your cert
         * `sudo nginx -t`
         * `sudo systemctl restart nginx`
     * copy `badge.service.sample` to `/lib/systemd/system/badge.service` and update with your project info
@@ -27,7 +24,10 @@
             * live dangerously: `--no-confirm`
         * Setup a cron job to forcefully delete all cached files every other day:
             * `0 0 2-30/2 * * /<PATH_TO_PROJ>/target/release/badge-cache admin --clear-cached-badges /<PATH_TO_PROJ>/static/badges --no-confirm >> /var/log/badge.log 2>&1`
-* `cargo run -- --help`
 
-Note, if you build an artifact, it needs to be run from the project root so it can find its `static/badges` directory
+## Development
+
+> `libssl-dev` is required on linux for `reqwest`
+
+* Run a dev instance `cargo run -- serve --log` -> `localhost:3000`
 
