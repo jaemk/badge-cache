@@ -137,7 +137,7 @@ def run(select=False, no_confirm=False):
         new_bin = bins[n-1]
 
         # ex. upaste-v0.2.4-x86_64-unknown-linux-gnu.tar.gz
-        target = new_bin['name'].rstrip('.tar.gz').split('-')[2:]
+        target = new_bin['name'].rstrip('.tar.gz').lstrip(BIN_NAME).split('-')[2:]
         target = '-'.join(target)
     else:
         print("\n** Found an existing target: `{}` specified in update config-file: `{}`".format(target, CONFIG_FILE))
