@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::fs;
 use std::env;
 
-use chrono::{DateTime, UTC, Local};
+use chrono::{DateTime, Utc, Local};
 use time;
 use iron::prelude::*;
 use iron::status;
@@ -32,13 +32,13 @@ use errors::*;
 
 
 pub struct Record {
-    pub last_refresh: DateTime<UTC>,
+    pub last_refresh: DateTime<Utc>,
     pub path_buf: PathBuf,
 }
 impl Record {
     pub fn from_path_buf(pb: &PathBuf) -> Self {
         Self {
-            last_refresh: UTC::now(),
+            last_refresh: Utc::now(),
             path_buf: pb.clone(),
         }
     }

@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::io::Write;
 use std::ffi::OsStr;
 use clap::ArgMatches;
-use chrono::UTC;
+use chrono::Utc;
 
 use errors::*;
 
@@ -63,7 +63,7 @@ fn clear_cached_files(no_confirm: bool, dir: &str) -> Result<()> {
         };
     }
 
-    let now = UTC::now().format(DT_FORMAT).to_string();
+    let now = Utc::now().format(DT_FORMAT).to_string();
     println!("[badge-cache] [admin] [{}] - cleaned out {} cached badges in {:?}", now, count, &static_root);
     Ok(())
 }

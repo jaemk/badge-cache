@@ -18,7 +18,7 @@ use persistent;
 use router::Router;
 use params::Params;
 use mime;
-use chrono::{self, UTC};
+use chrono::{self, Utc};
 use tera::Context;
 
 use service::{Cache, Record, Templates};
@@ -83,7 +83,7 @@ fn wait_and_clear(wait_dur: &std_time::Duration, cache: &Cache) -> Result<usize>
         let stale: Vec<String> = cache.iter().fold(vec![], |mut stale, (key, record)| {
             if let Some(ref record) = *record {
                 // collect stale keys & delete files
-                if UTC::now().signed_duration_since(record.last_refresh) > *CACHE_LIFESPAN {
+                if Utc::now().signed_duration_since(record.last_refresh) > *CACHE_LIFESPAN {
                     stale.push(key.clone());
                     // ignore failed deletions, file may be missing, any skipped files will
                     // be cleaned up by the occasional cron
@@ -151,35 +151,34 @@ fn fetch_badge(badge_type: &Badge, badge_path: &PathBuf, name: &str, filetype: &
     };
     let url = Url::parse_with_params(&url, params)?;
 
-    let mut client = reqwest::Client::new()?;
+    let mut client = reqwest::Client::builder()?;
     client.timeout(std_time::Duration::new(3, 0));
-    let mut resp = client.get(url.as_str())
-        .form(params)
+    let mut resp = client.build()?
+        .get(url.as_str())?
+        .form(params)?
         .send()?;
 
     if !resp.status().is_success() { bail!("HTTP request not successful, status: {}", resp.status()) }
     {
         // verify content-type
-        use reqwest::mime::Mime;
-        use reqwest::mime::TopLevel::{Image, Application};
-        use reqwest::mime::SubLevel::{Png, Json};
+        use reqwest::mime;
         let ct = match resp.headers().get::<ContentType>() {
             Some(ct) => ct,
             None => bail!("No content-type specified"),
         };
-        match **ct {
-            Mime(Image, Png, _) if filetype == "png" => (),
-            Mime(Application, Json, _) if filetype == "json" => (),
-            Mime(_, ref sub, _) => {
-                if filetype == "svg" && (&*sub == "xml+svg" || &*sub == "svg+xml") {
-                    // ok
-                } else if (filetype == "jpg" || filetype == "jpeg") && &*sub == "jpg" {
-                    // ok
-                } else {
-                    bail!("Invalid content-type. Expected {}, got {}", filetype, ct)
-                }
+        if **ct == mime::IMAGE_PNG && filetype == "png" {}
+        else if **ct == mime::APPLICATION_JSON && filetype == "json" {}
+        else {
+            let sub = ct.subtype();
+            let svg_suffix = ct.suffix().map(|t| t == "svg").unwrap_or(false);
+            if filetype == "svg" && (sub == "svg" || svg_suffix) {
+                // ok
+            } else if (filetype == "jpg" || filetype == "jpeg") && sub == "jpg" {
+                // ok
+            } else {
+                bail!("Invalid content-type. Expected {}, got {}", filetype, ct)
             }
-        };
+        }
     }
     info!("saving fresh badge ({}) -> {:?}", badge_type, badge_path);
 
@@ -243,7 +242,7 @@ fn get_badge(cache: Cache, badge_type: &Badge, name: &str, filetype: &str, param
         }
         Some(ref r) => {
             // cached `Record` found
-            if UTC::now().signed_duration_since(r.last_refresh) > *CACHE_LIFESPAN {
+            if Utc::now().signed_duration_since(r.last_refresh) > *CACHE_LIFESPAN {
                 // content is expired
                 new_record = Some(Record::from_path_buf(&r.path_buf));
                 fetch_badge(badge_type, &r.path_buf, name, filetype, params)
