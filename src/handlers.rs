@@ -402,3 +402,13 @@ pub fn landing(req: &mut Request) -> IronResult<Response> {
     let c = Context::new();
     render_to_req(req, "landing.html", c)
 }
+
+
+/// Return appinfo
+pub fn appinfo(_req: &mut Request) -> IronResult<Response> {
+    let json = json!({
+        "version": env!("CARGO_PKG_VERSION"),
+    });
+    Ok(Response::with((mime!(Application/Json), status::Ok, json.to_string())))
+}
+

@@ -15,5 +15,6 @@ pub fn mount(router: &mut Router, handlers: &Handlers) {
     router.post("/reset/badge/:badgeinfo",      handlers.reset_badge_handler.clone(), "reset_badge");
     router.get("/reset",                        handlers::reset_page,                 "reset");
 
-    router.get("/",                     handlers::landing, "home");
+    router.get("/",         handlers::landing, "home");
+    router.get("/appinfo",  handlers::appinfo, "appinfo");
 }

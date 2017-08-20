@@ -4,6 +4,7 @@ extern crate clap;
 extern crate reqwest;
 extern crate url;
 #[macro_use] extern crate lazy_static;
+#[macro_use] extern crate serde_json;
 
 #[macro_use] extern crate mime;
 #[macro_use] extern crate tera;
