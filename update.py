@@ -168,7 +168,8 @@ def run(select=False, no_confirm=False):
     tar.extractall()
     tar.close()
     os.system('mkdir -p {}'.format(BIN_DIR))
-    os.system('mv {} bin'.format(BIN_NAME))
+    os.system('mv {0} bin/{0}'.format(BIN_NAME))
+    os.system('cp bin/{0} bin/{0}_{1}'.format(BIN_NAME, latest_tag))
 
     # delete tarball
     print("** cleaning up `{}`".format(new_bin['name']))
