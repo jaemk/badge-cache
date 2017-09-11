@@ -280,7 +280,8 @@ fn badge_or_redirect(badge_type: &Badge, name: &str, params: &UrlParams, cache: 
         Err(_) => return Ok(Response::with((status::BadRequest, format!("Invalid filetype: {}. Accepted: [svg, png, jpg, json]", filetype)))),
     };
     match get_badge(cache, badge_type, name, filetype, params) {
-        Err(_) => {
+        Err(e) => {
+            error!("Failed fetching badge -> {}", e);
             // Failed to fetch a cached or fresh version, redirect to shields.io
             let url = match *badge_type {
                 Badge::Crate => format!("https://img.shields.io/crates/v/{}.{}", name, filetype),
