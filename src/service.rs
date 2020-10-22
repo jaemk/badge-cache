@@ -1,186 +1,472 @@
-//! Service
-//!  - Initialize persistent cache
-//!  - Initialize cleaning daemon
-//!  - Initialize loggers
-//!  - Mount url endpoints to `handlers` functions
-//!  - Mount static file handler
-//!
-use std::path::{Path, PathBuf};
+use actix_files::{Files, NamedFile};
+use actix_web::HttpResponse;
+use actix_web::HttpServer;
+use actix_web::{web, App};
+use async_mutex::Mutex;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use std::fs;
-use std::env;
+use std::path::{Path, PathBuf};
 
-use chrono::{DateTime, Utc, Local};
-use time;
-use iron::prelude::*;
-use iron::status;
-use iron::typemap::Key;
-use iron::middleware::AfterMiddleware;
-use iron::headers::{CacheControl, CacheDirective, Expires, HttpDate};
-use persistent::Read;
-use router::{Router, NoRoute};
-use mount::Mount;
-use staticfile::Static;
-use logger;
-use env_logger;
-use tera::Tera;
+use tera::{Context, Tera};
 
-use routes;
-use handlers;
-use errors::*;
+use crate::{CONFIG, LOG};
 
-
-pub struct Record {
-    pub last_refresh: DateTime<Utc>,
-    pub path_buf: PathBuf,
-}
-impl Record {
-    pub fn from_path_buf(pb: &PathBuf) -> Self {
-        Self {
-            last_refresh: Utc::now(),
-            path_buf: pb.clone(),
-        }
-    }
-    pub fn delete_file(self) -> Result<()> {
-        fs::remove_file(&self.path_buf)?;
-        Ok(())
-    }
+#[derive(Debug, Clone)]
+pub struct CachedFile {
+    cache_name: String,
+    created_millis: u128,
+    file_path: PathBuf,
 }
 
+lazy_static::lazy_static! {
+    pub static ref CACHE: Mutex<HashMap<String, CachedFile>> = {
+        Mutex::new(HashMap::with_capacity(512))
+    };
+}
 
-#[derive(Copy, Clone)]
-/// Tera template `iron::typemap` type
-pub struct Templates;
-impl Key for Templates { type Value = Tera; }
+async fn index(
+    template: web::Data<tera::Tera>,
+) -> actix_web::Result<HttpResponse, actix_web::Error> {
+    let s = template
+        .render("landing.html", &Context::new())
+        .map_err(|_| actix_web::error::ErrorInternalServerError("content error"))?;
+    Ok(HttpResponse::Ok().content_type("text/html").body(s))
+}
 
+#[derive(serde::Serialize, Debug)]
+enum Kind {
+    Crate,
+    Badge,
+}
 
-/// Alias for our cross thread cache
-pub type Cache = Arc<Mutex<HashMap<String, Option<Record>>>>;
+#[derive(serde::Serialize)]
+struct Params {
+    kind: Kind,
+    name: String,
+    ext: String,
+    query_params: String,
+    cache_name: String,
+    redirect_url: String,
+}
+impl Params {
+    fn new(full_name: &str, kind: Kind, request: &web::HttpRequest) -> anyhow::Result<Params> {
+        let parts = full_name.split('.').collect::<Vec<_>>();
+        let (name, ext) = if parts.len() < 2 {
+            (full_name.to_string(), CONFIG.default_file_ext.clone())
+        } else {
+            let name = parts[0].to_string();
+            let ext = parts.into_iter().skip(1).collect::<String>();
+            let ext = if ext.len() > CONFIG.max_ext_length {
+                let (ext_head, _) = ext.split_at(CONFIG.max_ext_length);
+                ext_head.to_string()
+            } else {
+                ext
+            };
+            (name, ext)
+        };
 
+        let query_params = request.query_string().to_string();
+        let full_name = if query_params.is_empty() {
+            format!("{}.{}", name, ext)
+        } else {
+            format!("{}.{}?{}", name, ext, query_params)
+        };
+        let name_for_file = if query_params.is_empty() {
+            format!("{}.{}", name, ext)
+        } else {
+            format!("{}_{}.{}", query_params, name, ext)
+        };
+        let cache_name = format!("{:?}_{}", kind, name_for_file);
 
-/// Custom `CacheControl` header settings
-/// Applies a `Cache-Control: max-age=3600` if no `CacheControl` header is already set.
-/// Applies a `Expires: now + 1hr` if no `Expires` header is already set.
-struct DefaultCacheSettings;
-impl AfterMiddleware for DefaultCacheSettings {
-    fn after(&self, _req: &mut Request, mut resp: Response) -> IronResult<Response> {
-        if resp.headers.get::<CacheControl>().is_none() {
-            resp.headers.set(
-                CacheControl(vec![
-                    CacheDirective::MaxAge(3600u32), // 1hr
-                    CacheDirective::Public,
-                ]));
+        let base_url = "https://img.shields.io";
+        let redirect_url = match kind {
+            Kind::Crate => format!("{}/crates/v/{}", base_url, full_name),
+            Kind::Badge => format!("{}/badge/{}", base_url, full_name),
+        };
+        Ok(Params {
+            kind,
+            name,
+            ext,
+            query_params,
+            cache_name,
+            redirect_url,
+        })
+    }
+}
+
+#[derive(Default)]
+struct Badge {
+    was_cached: bool,
+    file_path: Option<std::path::PathBuf>,
+    redirect_url: String,
+}
+impl Badge {
+    async fn into_response(self, request: &web::HttpRequest) -> anyhow::Result<HttpResponse> {
+        if let Some(p) = self.file_path {
+            let mut resp = NamedFile::open(p)?
+                .into_response(request)
+                .map_err(|e| anyhow::anyhow!("asset not found: {:?}", e))?;
+            let hdrs = resp.headers_mut();
+
+            let ctrl = actix_web::http::HeaderValue::from_str(&format!(
+                "max-age={}, public",
+                CONFIG.http_expiry_seconds
+            ))?;
+            hdrs.insert(actix_web::http::header::CACHE_CONTROL, ctrl);
+
+            let expiry_dt = chrono::Utc::now()
+                .checked_add_signed(chrono::Duration::seconds(CONFIG.http_expiry_seconds))
+                .ok_or_else(|| anyhow::anyhow!("error creating expiry datetime"))?;
+            let exp = actix_web::http::HeaderValue::from_str(&expiry_dt.to_rfc2822())?;
+            hdrs.insert(actix_web::http::header::EXPIRES, exp);
+            hdrs.insert(
+                actix_web::http::HeaderName::from_static("x-was-cached"),
+                actix_web::http::HeaderValue::from_str(&format!("{}", self.was_cached))?,
+            );
+            Ok(resp)
+        } else {
+            Ok(HttpResponse::TemporaryRedirect()
+                .set_header("Location", self.redirect_url)
+                .finish())
         }
-        if resp.headers.get::<Expires>().is_none() {
-            resp.headers.set(
-                Expires(HttpDate(time::now() + time::Duration::hours(1)))
+    }
+}
+
+async fn _request_badge_to_file(params: &Params) -> anyhow::Result<PathBuf> {
+    let resp = reqwest::get(&params.redirect_url)
+        .await
+        .map_err(|e| anyhow::anyhow!("request failed: {}", e))?
+        .bytes()
+        .await
+        .map_err(|e| anyhow::anyhow!("request read failed: {}", e))?;
+
+    let new_file_path = Path::new(&CONFIG.cache_dir).join(&params.cache_name);
+    let new_file_path = web::block(move || -> anyhow::Result<PathBuf> {
+        use std::io::Write;
+        let mut f = std::fs::File::create(&new_file_path)
+            .map_err(|e| anyhow::anyhow!("failed to create file {}", e))?;
+        f.write_all(&resp)
+            .map_err(|e| anyhow::anyhow!("failed writing response to file {}", e))?;
+        Ok(new_file_path)
+    })
+    .await?;
+
+    Ok(new_file_path)
+}
+
+fn now_millis() -> u128 {
+    let now = std::time::SystemTime::now();
+    now.duration_since(std::time::SystemTime::UNIX_EPOCH)
+        .map(|dur| dur.as_millis())
+        .unwrap_or(0)
+}
+
+async fn _get_cached_badge(params: &Params) -> anyhow::Result<(bool, PathBuf)> {
+    let cached = {
+        let guard = CACHE.lock().await;
+        guard.get(&params.cache_name).and_then(|cached_file| {
+            let now = now_millis();
+            let diff = now - cached_file.created_millis;
+            if diff > CONFIG.cache_ttl_millis {
+                slog::info!(
+                    LOG, "cached file expired";
+                    "file" => &params.cache_name,
                 );
+                None
+            } else {
+                slog::info!(
+                    LOG, "using cached file";
+                    "file" => &params.cache_name,
+                );
+                Some(cached_file.file_path.to_owned())
+            }
+        })
+    };
+    let (was_cached, file) = match cached {
+        Some(f) => (true, f),
+        None => {
+            slog::info!(
+                LOG, "fetching new content";
+                "file" => &params.cache_name,
+            );
+            let new_file = _request_badge_to_file(params).await?;
+            let mut guard = CACHE.lock().await;
+            guard.insert(
+                params.cache_name.clone(),
+                CachedFile {
+                    cache_name: params.cache_name.clone(),
+                    created_millis: now_millis(),
+                    file_path: new_file.clone(),
+                },
+            );
+            (false, new_file)
         }
-        Ok(resp)
-    }
+    };
+    Ok((was_cached, file))
 }
 
-
-static ERROR_404: &'static str = r##"
-<html>
-    <pre>
-        Nothing to see here... <img src="/badge/~(=^.^)-meow-yellow.svg?style=social"/>
-    </pre>
-</html>
-"##;
-
-/// Custom 404 Error handler/content
-struct Error404;
-impl AfterMiddleware for Error404 {
-    fn catch(&self, _req: &mut Request, e: IronError) -> IronResult<Response> {
-        if let Some(_) = e.error.downcast::<NoRoute>() {
-            return Ok(Response::with((status::NotFound, mime!(Text/Html), ERROR_404)))
-        }
-        Err(e)
-    }
+async fn get_cached_badge(params: &Params) -> anyhow::Result<Badge> {
+    let cache_result = _get_cached_badge(params).await.map_err(|e| {
+        slog::error!(LOG, "error requesting badge {:?}", e);
+        e
+    });
+    let (was_cached, file_path) = match cache_result.ok() {
+        Some((was_cached, file_path)) => (was_cached, Some(file_path)),
+        None => (false, None),
+    };
+    Ok(Badge {
+        was_cached,
+        file_path,
+        redirect_url: params.redirect_url.clone(),
+    })
 }
 
-
-/// Set ssl cert env. vars to make sure openssl can find required files
-fn set_ssl_vars() {
-    #[cfg(target_os="linux")]
-    {
-        if ::std::env::var_os("SSL_CERT_FILE").is_none() {
-            ::std::env::set_var("SSL_CERT_FILE", "/etc/ssl/certs/ca-certificates.crt");
-        }
-        if ::std::env::var_os("SSL_CERT_DIR").is_none() {
-            ::std::env::set_var("SSL_CERT_DIR", "/etc/ssl/certs");
-        }
-    }
+async fn reset_cached_badge(params: &Params) -> anyhow::Result<()> {
+    slog::info!(LOG, "dropping cached badge: {}", params.cache_name);
+    let mut guard = CACHE.lock().await;
+    guard.remove(&params.cache_name);
+    Ok(())
 }
 
+async fn get_crate(
+    web::Path(name): web::Path<String>,
+    request: web::HttpRequest,
+) -> actix_web::Result<HttpResponse, actix_web::Error> {
+    let params = Params::new(&name, Kind::Crate, &request).map_err(|e| {
+        slog::error!(LOG, "error parsing crate {}: {:?}", name, e);
+        actix_web::error::ErrorBadRequest(format!("invalid badge name: {}", name))
+    })?;
+    let badge = get_cached_badge(&params).await.map_err(|e| {
+        slog::error!(LOG, "error retrieving badge {}: {:?}", name, e);
+        actix_web::error::ErrorInternalServerError(format!("error retrieving badge: {}", name))
+    })?;
+    let resp = badge.into_response(&request).await.map_err(|e| {
+        slog::error!(LOG, "error loading badge {}: {:?}", name, e);
+        actix_web::error::ErrorInternalServerError(format!("error loading badge: {}", name))
+    })?;
+    Ok(resp)
+}
 
-/// Initialize server
-pub fn start(host: &str) {
-    set_ssl_vars();
+async fn get_badge(
+    web::Path(name): web::Path<String>,
+    request: web::HttpRequest,
+) -> actix_web::Result<HttpResponse, actix_web::Error> {
+    let params = Params::new(&name, Kind::Badge, &request).map_err(|e| {
+        slog::error!(LOG, "error parsing badge {}: {:?}", name, e);
+        actix_web::error::ErrorBadRequest(format!("invalid badge name: {}", name))
+    })?;
+    let badge = get_cached_badge(&params).await.map_err(|e| {
+        slog::error!(LOG, "error retrieving badge {}: {:?}", name, e);
+        actix_web::error::ErrorInternalServerError(format!("error retrieving badge: {}", name))
+    })?;
+    let resp = badge.into_response(&request).await.map_err(|e| {
+        slog::error!(LOG, "error loading badge {}: {:?}", name, e);
+        actix_web::error::ErrorInternalServerError(format!("error loading badge: {}", name))
+    })?;
+    Ok(resp)
+}
 
-    // get default host
-    let host = if host.is_empty() { "localhost:3000" } else { host };
+async fn reset_crate(
+    web::Path(name): web::Path<String>,
+    request: web::HttpRequest,
+) -> actix_web::Result<HttpResponse, actix_web::Error> {
+    let params = Params::new(&name, Kind::Crate, &request)
+        .map_err(|_| actix_web::error::ErrorBadRequest(format!("invalid badge name: {}", name)))?;
+    reset_cached_badge(&params).await.map_err(|e| {
+        slog::error!(LOG, "error resting badge {}: {:?}", name, e);
+        actix_web::error::ErrorInternalServerError(format!("error resting badge: {}", name))
+    })?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "ok": "ok",
+    })))
+}
 
-    // Initialize template engine
-    let mut tera = compile_templates!("templates/**/*");
-    tera.autoescape_on(vec!["html"]);
+async fn reset_badge(
+    web::Path(name): web::Path<String>,
+    request: web::HttpRequest,
+) -> actix_web::Result<HttpResponse, actix_web::Error> {
+    let params = Params::new(&name, Kind::Badge, &request)
+        .map_err(|_| actix_web::error::ErrorBadRequest(format!("invalid badge name: {}", name)))?;
+    reset_cached_badge(&params).await.map_err(|e| {
+        slog::error!(LOG, "error resting badge {}: {:?}", name, e);
+        actix_web::error::ErrorInternalServerError(format!("error resting badge: {}", name))
+    })?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "ok": "ok",
+    })))
+}
 
-    // setup our cache
-    let cache = Arc::new(Mutex::new(HashMap::new()));
+macro_rules! make_file_serve_fns {
+    ($([$name:ident, $path:expr]),* $(,),*) => {
+        $(
+            async fn $name() -> actix_web::Result<NamedFile> {
+                Ok(NamedFile::open($path).map_err(|_| actix_web::error::ErrorInternalServerError("asset not found"))?)
+            }
+        )*
+    };
+}
 
-    // initialize cleaning thread
-    handlers::init_cleaner(cache.clone());
+make_file_serve_fns!(
+    [favicon, "static/favicon.ico"],
+    [robots, "static/robots.txt"],
+);
 
-    // initialize handlers with access to our cache
-    let handlers_ = handlers::initialize(cache.clone());
+async fn status() -> actix_web::Result<HttpResponse> {
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "status": "ok",
+        "version": CONFIG.version,
+    })))
+}
 
-    // mount our url endpoints
-    let mut router = Router::new();
-    routes::mount(&mut router, &handlers_);
+async fn p404() -> actix_web::Result<HttpResponse> {
+    Ok(HttpResponse::NotFound().body("nothing here"))
+}
 
-    // Initialize our Chain with our router,
-    let mut chain = Chain::new(router);
+async fn cleanup_cache_dir() -> anyhow::Result<()> {
+    use futures::stream::StreamExt;
+    slog::info!(LOG, "cleaning cache dir: {}", &CONFIG.cache_dir);
+    let reader = tokio::fs::read_dir(&CONFIG.cache_dir).await?;
 
-    // Initialize and link:
-    // - Loggers
-    // - CacheControl Middleware
-    // - Custom 404 handler
-    // - Persistent template engine access
+    reader
+        .for_each(|entry| async {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(e) => {
+                    slog::error!(LOG, "failed unwraping dir entry: {:?}", e);
+                    return;
+                }
+            };
+            let path = entry.path();
+            if path.is_dir() {
+                return;
+            }
+            let file_name = match entry.file_name().into_string() {
+                Ok(n) => n,
+                Err(e) => {
+                    slog::error!(LOG, "failed converting filename to string: {:?}", e);
+                    return;
+                }
+            };
+            if file_name == ".gitkeep" {
+                return;
+            }
 
-    // Set a custom logging format & change the env-var to "LOG"
-    // e.g. LOG=info badge-cache serve
-    env_logger::LogBuilder::new()
-        .format(|record| {
-            format!("{} [{}] - [{}] -> {}",
-                Local::now().format("%Y-%m-%d_%H:%M:%S"),
-                record.level(),
-                record.location().module_path(),
-                record.args()
-                )
+            // file names should also be the cache names
+            let guard = CACHE.lock().await;
+            if guard.get(&file_name).is_none() {
+                // If it's been evicted from the cache, then delete the file.
+                // This means most things will be deleted on startup.
+                slog::info!(LOG, "removing stale cached file: {}, {:?}", file_name, path);
+                match tokio::fs::remove_file(&path).await {
+                    Ok(_) => (),
+                    Err(e) => {
+                        slog::error!(LOG, "failed removing stale file: {:?}, {:?}", path, e);
+                        return;
+                    }
+                }
+            }
+        })
+        .await;
+    Ok(())
+}
+
+async fn cleanup() {
+    let start = actix_web::rt::time::Instant::now() + std::time::Duration::from_secs(5);
+    let mut interval =
+        actix_web::rt::time::interval_at(start, std::time::Duration::from_secs(60 * 5));
+    loop {
+        interval.tick().await;
+        slog::info!(LOG, "cleaning stale items");
+
+        let now = now_millis();
+        let removed_from_cache = {
+            let mut guard = CACHE.lock().await;
+            let mut removed = vec![];
+            guard.retain(|_, v| {
+                let diff_ms = now - v.created_millis;
+                if diff_ms > CONFIG.cache_ttl_millis {
+                    slog::info!(LOG, "invalidating cached item: {}", v.cache_name);
+                    removed.push(v.clone());
+                    false
+                } else {
+                    true
+                }
+            });
+            removed
+        };
+        slog::info!(
+            LOG,
+            "removed {} stale items from cache",
+            removed_from_cache.len()
+        );
+        cleanup_cache_dir()
+            .await
+            .map_err(|e| {
+                slog::error!(LOG, "error cleaning caching dir {:?}", e);
             })
-        .parse(&env::var("LOG").unwrap_or_default())
-        .init()
-        .expect("failed to initialize logger");
+            .ok();
+    }
+}
 
-    // iron request-middleware loggers
-    let format = logger::Format::new("[{request-time}] [{status}] {method} {uri}").unwrap();
-    let (log_before, log_after) = logger::Logger::new(Some(format));
+pub async fn start() -> anyhow::Result<()> {
+    CONFIG.ensure_loaded()?;
 
-    chain.link_before(log_before);
-    chain.link_after(DefaultCacheSettings);
-    chain.link_after(log_after);
-    chain.link_after(Error404);
-    chain.link(Read::<Templates>::both(tera));
+    let addr = format!("{}:{}", CONFIG.host, CONFIG.port);
+    slog::info!(LOG, "** Listening on {} **", addr);
 
-    // mount our chain of services and a static file handler
-    let mut mount = Mount::new();
-    mount.mount("/", chain)
-         .mount("/favicon.ico", Static::new(Path::new("static/favicon.ico")))
-         .mount("/robots.txt", Static::new(Path::new("static/robots.txt")))
-         .mount("/static/", Static::new(Path::new("static")));
+    HttpServer::new(|| {
+        actix_web::rt::spawn(cleanup());
+        let tera = Tera::new("templates/**/*.html").expect("unable to compile templates");
 
-    info!(" ** Serving at {} **", host);
-    Iron::new(mount).http(host).unwrap();
+        App::new()
+            .data(tera)
+            .wrap(crate::logger::Logger::new())
+            .service(
+                web::resource("/")
+                    .route(web::get().to(index))
+                    .route(web::head().to(|| HttpResponse::Ok().header("x-head", "less").finish())),
+            )
+            .service(
+                web::resource("/crates/v/{name}")
+                    .route(web::get().to(get_crate))
+                    .route(web::head().to(|| HttpResponse::Ok().finish())),
+            )
+            .service(
+                web::resource("/crate/{name}")
+                    .route(web::get().to(get_crate))
+                    .route(web::head().to(|| HttpResponse::Ok().finish())),
+            )
+            .service(
+                web::resource("/badge/{name}")
+                    .route(web::get().to(get_badge))
+                    .route(web::head().to(|| HttpResponse::Ok().finish())),
+            )
+            .service(
+                web::resource("/reset/crates/v/{name}")
+                    .route(web::get().to(reset_crate))
+                    .route(web::head().to(|| HttpResponse::Ok().finish())),
+            )
+            .service(
+                web::resource("/reset/crate/{name}")
+                    .route(web::get().to(reset_crate))
+                    .route(web::head().to(|| HttpResponse::Ok().finish())),
+            )
+            .service(
+                web::resource("/reset/badge/{name}")
+                    .route(web::get().to(reset_badge))
+                    .route(web::head().to(|| HttpResponse::Ok().finish())),
+            )
+            // static files
+            .service(Files::new("/static", "static"))
+            // status
+            .service(web::resource("/status").route(web::get().to(status)))
+            // special resources
+            .service(web::resource("/favicon.ico").route(web::get().to(favicon)))
+            .service(web::resource("/robots.txt").route(web::get().to(robots)))
+            // 404s
+            .default_service(web::resource("").route(web::get().to(p404)))
+    })
+    .bind(addr)?
+    .run()
+    .await?;
+    Ok(())
 }

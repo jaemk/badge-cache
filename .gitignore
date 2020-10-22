@@ -1,10 +1,4 @@
-target/
 **/*.rs.bk
-Cargo.lock
-**/badges/*.svg
-**/badges/*.png
-**/badges/*.jpg
-**/badges/*.json
-nginx.conf
-.update-config
-bin/
+target/
+.env.local
+cache_dir/*
