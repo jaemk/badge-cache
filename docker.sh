@@ -39,6 +39,6 @@ if [ "$1" = "run" ]; then
 elif [ "$1" = "push" ]; then
     echo "pushing images..."
     set -x
-    docker push jaemk/badge-cache:$1
+    docker push jaemk/badge-cache:$tag
     docker push jaemk/badge-cache:latest
 fi
