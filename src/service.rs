@@ -175,6 +175,12 @@ impl Params {
             };
 
             let ext = parts[end_ind].to_string();
+            let (name, ext) = if !["svg", "png", "json"].contains(&ext.as_str()) {
+                // put back the "ext" and use the default extension
+                (format!("{}.{}", name, ext), CONFIG.default_file_ext.clone())
+            } else {
+                (name, ext)
+            };
             let ext = if ext.len() > CONFIG.max_ext_length {
                 let (ext_head, _) = ext.split_at(CONFIG.max_ext_length);
                 slog::info!(
