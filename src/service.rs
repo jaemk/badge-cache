@@ -153,7 +153,9 @@ impl Params {
         let (name, ext) = if parts.len() < 2 {
             (full_name.to_string(), CONFIG.default_file_ext.clone())
         } else {
-            let name = parts[0].to_string();
+            let parts_len = parts.len();
+            let end_ind = parts_len - 1;
+            let name = parts[0..end_ind].iter().copied().collect::<String>();
             let name = if name.len() > CONFIG.max_name_length {
                 let (name_head, _) = name.split_at(CONFIG.max_name_length);
                 slog::info!(
@@ -168,7 +170,7 @@ impl Params {
                 name
             };
 
-            let ext = parts.into_iter().skip(1).collect::<String>();
+            let ext = parts[end_ind].to_string();
             let ext = if ext.len() > CONFIG.max_ext_length {
                 let (ext_head, _) = ext.split_at(CONFIG.max_ext_length);
                 slog::info!(
