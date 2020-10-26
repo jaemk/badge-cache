@@ -155,7 +155,11 @@ impl Params {
         } else {
             let parts_len = parts.len();
             let end_ind = parts_len - 1;
-            let name = parts[0..end_ind].iter().copied().collect::<String>();
+            let name = parts[0..end_ind]
+                .iter()
+                .copied()
+                .collect::<Vec<_>>()
+                .join(".");
             let name = if name.len() > CONFIG.max_name_length {
                 let (name_head, _) = name.split_at(CONFIG.max_name_length);
                 slog::info!(
