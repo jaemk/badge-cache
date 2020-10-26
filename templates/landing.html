@@ -8,6 +8,7 @@ Usage:
     - Get a crate's badge:
         /crate/&ltcrate-name&gt?&ltshields-io-params&gt
         ex. /crate/iron?label=iron&style=flat-square <img src="/crate/iron?label=iron&style=flat-square" />
+        ex. /crate/mime.svg?label=mime <img src="/crate/mime.svg?label=mime" />
 
 
         (shields.io compatible url)
@@ -33,8 +34,8 @@ Usage:
     - Force a server cache reset:
         See the <a href="/reset">reset page</a>, or use the api directly:
         ex.
-            curl -X POST https://badge-cache.kominick.com/reset/crate/mime.jpg?label=mime
-            curl -X POST https://badge-cache.kominick.com/reset/crates/v/mime.jpg?label=mime
+            curl -X DELETE https://badge-cache.kominick.com/reset/crate/mime.jpg?label=mime
+            curl -X DELETE https://badge-cache.kominick.com/reset/crates/v/mime.jpg?label=mime
 </pre>
 {% endblock content %}
 

@@ -42,11 +42,15 @@ pub struct Config {
     pub host: String,
     pub port: u16,
     pub log_format: String,
+    pub max_name_length: usize,
     pub max_ext_length: usize,
+    pub max_qs_length: usize,
     pub cache_ttl_millis: u128,
     pub cache_dir: String,
     pub http_expiry_seconds: i64,
     pub default_file_ext: String,
+    pub cleanup_delay_seconds: u64,
+    pub cleanup_interval_seconds: u64,
 }
 impl Config {
     pub fn load() -> Self {
@@ -60,14 +64,20 @@ impl Config {
         Self {
             version,
             host: env_or("HOST", "0.0.0.0"),
-            port: env_or("PORT", "4000").parse().expect("invalid port"),
+            port: env_or("PORT", "3003").parse().expect("invalid port"),
             log_format: env_or("LOG_FORMAT", "json")
                 .to_lowercase()
                 .trim()
                 .to_string(),
-            max_ext_length: env_or("MAX_EXT_LENGTH", "1024")
+            max_name_length: env_or("MAX_NAME_LENGTH", "512")
+                .parse()
+                .expect("invalid max_name_length"),
+            max_ext_length: env_or("MAX_EXT_LENGTH", "512")
                 .parse()
                 .expect("invalid max_ext_length"),
+            max_qs_length: env_or("MAX_QS_LENGTH", "512")
+                .parse()
+                .expect("invalid max_qs_length"),
             cache_ttl_millis: env_or(
                 "CACHE_TTL_MILLIS",
                 (60 * 60 * 24 * 1000).to_string().as_str(),
@@ -79,6 +89,15 @@ impl Config {
                 .parse()
                 .expect("invalid http_expiry_seconds"),
             default_file_ext: env_or("DEFAULT_FILE_EXT", "svg"),
+            cleanup_delay_seconds: env_or("CLEANUP_DELAY_SECONDS", "5")
+                .parse()
+                .expect("invalid cleanup_delay_seconds"),
+            cleanup_interval_seconds: env_or(
+                "CLEANUP_INTERVAL_SECONDS",
+                (5 * 60).to_string().as_str(),
+            )
+            .parse()
+            .expect("invalid cleanup_interval_seconds"),
         }
     }
     pub fn ensure_loaded(&self) -> anyhow::Result<()> {
@@ -93,11 +112,15 @@ async fn run() -> anyhow::Result<()> {
         "host" => &CONFIG.host,
         "port" => &CONFIG.port,
         "log_format" => &CONFIG.log_format,
+        "max_name_length" => &CONFIG.max_name_length,
         "max_ext_length" => &CONFIG.max_ext_length,
+        "max_qs_length" => &CONFIG.max_qs_length,
         "cache_ttl_millis" => &CONFIG.cache_ttl_millis,
         "cache_dir" => &CONFIG.cache_dir,
         "http_expiry_seconds" => &CONFIG.http_expiry_seconds,
         "default_file_ext" => &CONFIG.default_file_ext,
+        "cleanup_delay_seconds" => &CONFIG.cleanup_delay_seconds,
+        "cleanup_interval_seconds" => &CONFIG.cleanup_interval_seconds,
     );
     service::start().await?;
     Ok(())
@@ -105,6 +128,7 @@ async fn run() -> anyhow::Result<()> {
 
 #[tokio::main]
 async fn main() {
+    // need to run with tokio's runtime so we can use tokio libs
     let local = tokio::task::LocalSet::new();
     let sys = actix_web::rt::System::run_in_tokio("server", &local);
     if let Err(e) = run().await {
