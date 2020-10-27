@@ -28,6 +28,9 @@ PORT=3003
 # or 'pretty' for human consumption
 LOG_FORMAT=json
 
+# log level filter
+LOG_LEVEL=INFO
+
 # max badge name length before truncating
 MAX_NAME_LENGTH=512
 
