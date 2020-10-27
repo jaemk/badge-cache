@@ -35,7 +35,7 @@ fi
 if [ "$1" = "run" ]; then
     echo "running..."
     set -x
-    docker run --rm -it --init $ports $envs $envfile jaemk/badge-cache:latest
+    docker run --net=host --rm -it --init $ports $envs $envfile jaemk/badge-cache:latest
 elif [ "$1" = "push" ]; then
     echo "pushing images..."
     set -x

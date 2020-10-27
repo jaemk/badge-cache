@@ -211,6 +211,7 @@ impl Params {
         } else {
             query_params
         };
+
         let full_name = if query_params.is_empty() {
             format!("{}.{}", name, ext)
         } else {
@@ -240,12 +241,12 @@ impl Params {
 }
 
 #[derive(Default)]
-struct Badge {
+struct BadgeResult {
     was_cached: bool,
     file_path: Option<PathBuf>,
     redirect_url: String,
 }
-impl Badge {
+impl BadgeResult {
     async fn into_response(self, request: &HttpRequest) -> anyhow::Result<HttpResponse> {
         let path = if let Some(p) = self.file_path {
             tokio::fs::metadata(&p).await.map_err(|e| {
@@ -366,7 +367,7 @@ async fn _get_cached_badge(params: &Params) -> anyhow::Result<(bool, PathBuf)> {
     Ok((is_cached, locked_inner.file_path.clone()))
 }
 
-async fn get_cached_badge(params: &Params) -> anyhow::Result<Badge> {
+async fn get_cached_badge(params: &Params) -> anyhow::Result<BadgeResult> {
     let cache_result = _get_cached_badge(params).await.map_err(|e| {
         slog::error!(LOG, "error requesting badge {:?}", e);
         e
@@ -375,44 +376,19 @@ async fn get_cached_badge(params: &Params) -> anyhow::Result<Badge> {
         Some((was_cached, file_path)) => (was_cached, Some(file_path)),
         None => (false, None),
     };
-    Ok(Badge {
+    Ok(BadgeResult {
         was_cached,
         file_path,
         redirect_url: params.redirect_url.clone(),
     })
 }
 
-async fn reset_cached_badge(params: &Params) -> anyhow::Result<()> {
-    slog::info!(LOG, "dropping cached badge: {}", params.cache_name);
-    let mut guard = CACHE.lock().await;
-    guard.remove(&params.cache_name);
-    Ok(())
-}
-
-async fn get_crate(
-    web::Path(name): web::Path<String>,
+async fn get_badge_result_for_kind(
+    name: String,
     request: HttpRequest,
+    kind: Kind,
 ) -> actix_web::Result<HttpResponse, actix_web::Error> {
-    let params = Params::new(&name, Kind::Crate, &request).map_err(|e| {
-        slog::error!(LOG, "error parsing crate {}: {:?}", name, e);
-        actix_web::error::ErrorBadRequest(format!("invalid badge name: {}", name))
-    })?;
-    let badge = get_cached_badge(&params).await.map_err(|e| {
-        slog::error!(LOG, "error retrieving badge {}: {:?}", name, e);
-        actix_web::error::ErrorInternalServerError(format!("error retrieving badge: {}", name))
-    })?;
-    let resp = badge.into_response(&request).await.map_err(|e| {
-        slog::error!(LOG, "error loading badge {}: {:?}", name, e);
-        actix_web::error::ErrorInternalServerError(format!("error loading badge: {}", name))
-    })?;
-    Ok(resp)
-}
-
-async fn get_badge(
-    web::Path(name): web::Path<String>,
-    request: HttpRequest,
-) -> actix_web::Result<HttpResponse, actix_web::Error> {
-    let params = Params::new(&name, Kind::Badge, &request).map_err(|e| {
+    let params = Params::new(&name, kind, &request).map_err(|e| {
         slog::error!(LOG, "error parsing badge {}: {:?}", name, e);
         actix_web::error::ErrorBadRequest(format!("invalid badge name: {}", name))
     })?;
@@ -427,13 +403,37 @@ async fn get_badge(
     Ok(resp)
 }
 
-async fn reset_crate(
+async fn get_crate(
     web::Path(name): web::Path<String>,
     request: HttpRequest,
 ) -> actix_web::Result<HttpResponse, actix_web::Error> {
-    let params = Params::new(&name, Kind::Crate, &request)
+    let resp = get_badge_result_for_kind(name, request, Kind::Crate).await?;
+    Ok(resp)
+}
+
+async fn get_badge(
+    web::Path(name): web::Path<String>,
+    request: HttpRequest,
+) -> actix_web::Result<HttpResponse, actix_web::Error> {
+    let resp = get_badge_result_for_kind(name, request, Kind::Badge).await?;
+    Ok(resp)
+}
+
+async fn _reset_cached_badge(params: &Params) -> anyhow::Result<()> {
+    slog::info!(LOG, "dropping cached badge: {}", params.cache_name);
+    let mut guard = CACHE.lock().await;
+    guard.remove(&params.cache_name);
+    Ok(())
+}
+
+async fn reset_cached_badge(
+    name: String,
+    request: HttpRequest,
+    kind: Kind,
+) -> actix_web::Result<HttpResponse, actix_web::Error> {
+    let params = Params::new(&name, kind, &request)
         .map_err(|_| actix_web::error::ErrorBadRequest(format!("invalid badge name: {}", name)))?;
-    reset_cached_badge(&params).await.map_err(|e| {
+    _reset_cached_badge(&params).await.map_err(|e| {
         slog::error!(LOG, "error resting badge {}: {:?}", name, e);
         actix_web::error::ErrorInternalServerError(format!("error resting badge: {}", name))
     })?;
@@ -442,19 +442,20 @@ async fn reset_crate(
     })))
 }
 
+async fn reset_crate(
+    web::Path(name): web::Path<String>,
+    request: HttpRequest,
+) -> actix_web::Result<HttpResponse, actix_web::Error> {
+    let resp = reset_cached_badge(name, request, Kind::Crate).await?;
+    Ok(resp)
+}
+
 async fn reset_badge(
     web::Path(name): web::Path<String>,
     request: web::HttpRequest,
 ) -> actix_web::Result<HttpResponse, actix_web::Error> {
-    let params = Params::new(&name, Kind::Badge, &request)
-        .map_err(|_| actix_web::error::ErrorBadRequest(format!("invalid badge name: {}", name)))?;
-    reset_cached_badge(&params).await.map_err(|e| {
-        slog::error!(LOG, "error resting badge {}: {:?}", name, e);
-        actix_web::error::ErrorInternalServerError(format!("error resting badge: {}", name))
-    })?;
-    Ok(HttpResponse::Ok().json(serde_json::json!({
-        "ok": "ok",
-    })))
+    let resp = reset_cached_badge(name, request, Kind::Badge).await?;
+    Ok(resp)
 }
 
 macro_rules! make_file_serve_fns {
@@ -484,7 +485,7 @@ async fn p404() -> actix_web::Result<HttpResponse> {
 }
 
 pub async fn start() -> anyhow::Result<()> {
-    CONFIG.ensure_loaded()?;
+    slog::debug!(LOG, "debug!!");
 
     let addr = format!("{}:{}", CONFIG.host, CONFIG.port);
     slog::info!(LOG, "** Listening on {} **", addr);

@@ -18,16 +18,19 @@ lazy_static::lazy_static! {
 
     // The "base" logger that all crates should branch off of
     pub static ref BASE_LOG: slog::Logger = {
+        let level: slog::Level = CONFIG.log_level
+                .parse()
+                .expect("invalid log_level");
         if CONFIG.log_format == "pretty" {
             let decorator = slog_term::TermDecorator::new().build();
             let drain = slog_term::CompactFormat::new(decorator).build().fuse();
             let drain = slog_async::Async::new(drain).build().fuse();
-            let drain = slog::LevelFilter::new(drain, slog::Level::Debug).fuse();
+            let drain = slog::LevelFilter::new(drain, level).fuse();
             slog::Logger::root(drain, o!())
         } else {
             let drain = slog_json::Json::default(std::io::stderr()).fuse();
             let drain = slog_async::Async::new(drain).build().fuse();
-            let drain = slog::LevelFilter::new(drain, slog::Level::Info).fuse();
+            let drain = slog::LevelFilter::new(drain, level).fuse();
             slog::Logger::root(drain, o!())
         }
     };
@@ -42,6 +45,7 @@ pub struct Config {
     pub host: String,
     pub port: u16,
     pub log_format: String,
+    pub log_level: String,
     pub max_name_length: usize,
     pub max_ext_length: usize,
     pub max_qs_length: usize,
@@ -69,6 +73,7 @@ impl Config {
                 .to_lowercase()
                 .trim()
                 .to_string(),
+            log_level: env_or("LOG_LEVEL", "INFO"),
             max_name_length: env_or("MAX_NAME_LENGTH", "512")
                 .parse()
                 .expect("invalid max_name_length"),
@@ -100,28 +105,30 @@ impl Config {
             .expect("invalid cleanup_interval_seconds"),
         }
     }
-    pub fn ensure_loaded(&self) -> anyhow::Result<()> {
+    pub fn initialize(&self) -> anyhow::Result<()> {
+        slog::info!(
+            LOG, "initialized config";
+            "version" => &CONFIG.version,
+            "host" => &CONFIG.host,
+            "port" => &CONFIG.port,
+            "log_format" => &CONFIG.log_format,
+            "log_level" => &CONFIG.log_level,
+            "max_name_length" => &CONFIG.max_name_length,
+            "max_ext_length" => &CONFIG.max_ext_length,
+            "max_qs_length" => &CONFIG.max_qs_length,
+            "cache_ttl_millis" => &CONFIG.cache_ttl_millis,
+            "cache_dir" => &CONFIG.cache_dir,
+            "http_expiry_seconds" => &CONFIG.http_expiry_seconds,
+            "default_file_ext" => &CONFIG.default_file_ext,
+            "cleanup_delay_seconds" => &CONFIG.cleanup_delay_seconds,
+            "cleanup_interval_seconds" => &CONFIG.cleanup_interval_seconds,
+        );
         Ok(())
     }
 }
 
 async fn run() -> anyhow::Result<()> {
-    slog::info!(
-        LOG, "initializing";
-        "version" => &CONFIG.version,
-        "host" => &CONFIG.host,
-        "port" => &CONFIG.port,
-        "log_format" => &CONFIG.log_format,
-        "max_name_length" => &CONFIG.max_name_length,
-        "max_ext_length" => &CONFIG.max_ext_length,
-        "max_qs_length" => &CONFIG.max_qs_length,
-        "cache_ttl_millis" => &CONFIG.cache_ttl_millis,
-        "cache_dir" => &CONFIG.cache_dir,
-        "http_expiry_seconds" => &CONFIG.http_expiry_seconds,
-        "default_file_ext" => &CONFIG.default_file_ext,
-        "cleanup_delay_seconds" => &CONFIG.cleanup_delay_seconds,
-        "cleanup_interval_seconds" => &CONFIG.cleanup_interval_seconds,
-    );
+    CONFIG.initialize()?;
     service::start().await?;
     Ok(())
 }
