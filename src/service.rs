@@ -485,8 +485,6 @@ async fn p404() -> actix_web::Result<HttpResponse> {
 }
 
 pub async fn start() -> anyhow::Result<()> {
-    slog::debug!(LOG, "debug!!");
-
     let addr = format!("{}:{}", CONFIG.host, CONFIG.port);
     slog::info!(LOG, "** Listening on {} **", addr);
 
