@@ -1,4 +1,4 @@
-FROM rust:1.47
+FROM rust:1.53
 
 # create a new empty shell
 RUN USER=root cargo new --bin badge-cache
@@ -17,17 +17,23 @@ RUN mkdir cache_dir
 
 RUN rm ./src/*.rs
 
-# # copy all source/static/resource files
+# # copy source
 COPY ./src ./src
-COPY ./static ./static
-COPY ./templates ./templates
-
-# # build for release
-RUN cargo build --release
 
 COPY ./.git .git
 RUN git rev-parse HEAD | head -c 7 | awk '{ printf "%s", $0 >"commit_hash.txt" }'
 RUN rm -rf .git
 
+# # build for release
+RUN cargo build --release
+
+# copy all static files
+COPY ./static ./static
+COPY ./templates ./templates
+
+RUN mkdir ./bin
+RUN cp ./target/release/badge-cache ./bin/badge-cache
+RUN rm -rf ./target
+
 # set the startup command to run your binary
-CMD ["./target/release/badge-cache"]
+CMD ["./bin/badge-cache"]

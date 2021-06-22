@@ -61,7 +61,7 @@ impl Config {
         let version = fs::File::open("commit_hash.txt")
             .map(|mut f| {
                 let mut s = String::new();
-                f.read_to_string(&mut s).expect("Error reading commit_hasg");
+                f.read_to_string(&mut s).expect("Error reading commit_hash");
                 s
             })
             .unwrap_or_else(|_| "unknown".to_string());

@@ -4,13 +4,14 @@ set -e
 
 # update version
 tag="$(git rev-parse HEAD | head -c 7 | awk '{ printf "%s", $0 }')"
+reg=docker.jaemk.me
 
 echo "building images... latest, $tag "
 
-docker build -t jaemk/badge-cache:$tag .
-docker build -t jaemk/badge-cache:latest .
+docker build -t $reg/badge-cache:$tag .
+docker build -t $reg/badge-cache:latest .
 
-ports="-p 4000:4000"
+ports="-p 3003:3003"
 
 # set envs from csv env var
 if [[ -z "$ENVS" ]]; then
@@ -31,14 +32,15 @@ else
     envfile="--env-file $ENVFILE"
 fi
 
+root=$(git rev-parse --show-toplevel)
 
 if [ "$1" = "run" ]; then
     echo "running..."
     set -x
-    docker run --net=host --rm -it --init $ports $envs $envfile jaemk/badge-cache:latest
+    docker run --rm -it --init $ports $envs $envfile -v $root/cache_dir:/badge-cache/cache_dir $reg/badge-cache:latest
 elif [ "$1" = "push" ]; then
     echo "pushing images..."
     set -x
-    docker push jaemk/badge-cache:$tag
-    docker push jaemk/badge-cache:latest
+    docker push $reg/badge-cache:$tag
+    docker push $reg/badge-cache:latest
 fi

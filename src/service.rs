@@ -61,7 +61,6 @@ async fn cleanup_cache_dir() -> anyhow::Result<()> {
                     Ok(_) => (),
                     Err(e) => {
                         slog::error!(LOG, "failed removing stale file: {:?}, {:?}", path, e);
-                        return;
                     }
                 }
             }
