@@ -1,4 +1,4 @@
-FROM rust:1.53
+FROM rust:1.58.1-bullseye as builder
 
 # create a new empty shell
 RUN USER=root cargo new --bin badge-cache
@@ -34,6 +34,11 @@ COPY ./templates ./templates
 RUN mkdir ./bin
 RUN cp ./target/release/badge-cache ./bin/badge-cache
 RUN rm -rf ./target
+
+FROM debian:bullseye-slim
+RUN apt-get update && apt-get install --yes ca-certificates
+COPY --from=builder /badge-cache /badge-cache
+WORKDIR /badge-cache
 
 # set the startup command to run your binary
 CMD ["./bin/badge-cache"]
